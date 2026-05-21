@@ -72,32 +72,50 @@ export default function AppNav() {
   return (
     <nav style={{
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-      background: 'rgba(18,21,31,0.92)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      borderTop: '1px solid rgba(37,44,66,0.8)',
-      paddingBottom: 'env(safe-area-inset-bottom)',
+      padding: '0 12px calc(8px + env(safe-area-inset-bottom))',
+      pointerEvents: 'none',
     }}>
       <div style={{
         display: 'flex', justifyContent: 'space-around', alignItems: 'stretch',
-        padding: '6px 0 2px',
+        padding: '8px 8px 6px',
         maxWidth: 600, margin: '0 auto',
+        background: 'linear-gradient(145deg, rgba(20,28,45,0.84), rgba(7,10,20,0.88))',
+        backdropFilter: 'blur(24px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+        border: '1px solid rgba(151,181,225,0.18)',
+        borderRadius: 22,
+        boxShadow: '0 22px 58px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.07)',
+        pointerEvents: 'auto',
       }}>
         {NAV_ITEMS.map(item => {
           const active = pathname === item.href ||
             (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (
             <Link key={item.href} href={item.href} style={{
+              position: 'relative',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
               padding: '5px 8px 7px',
-              borderRadius: 12,
+              borderRadius: 16,
               textDecoration: 'none',
-              color: active ? 'var(--accent-blue)' : 'var(--text-muted)',
+              color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+              background: active ? 'linear-gradient(145deg, rgba(90,169,255,0.18), rgba(103,232,249,0.08))' : 'transparent',
+              boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 0 22px rgba(90,169,255,0.12)' : 'none',
               minWidth: 48,
               flex: 1,
               WebkitTapHighlightColor: 'transparent',
-              transition: 'color 0.15s',
+              transition: 'color 0.18s ease, background 0.18s ease, transform 0.14s ease, box-shadow 0.18s ease',
             }}>
+              {active && (
+                <span style={{
+                  position: 'absolute',
+                  top: 3,
+                  width: 18,
+                  height: 2,
+                  borderRadius: 999,
+                  background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-blue))',
+                  boxShadow: '0 0 12px rgba(103,232,249,0.5)',
+                }} />
+              )}
               {item.icon(active)}
               <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, letterSpacing: '0.01em', lineHeight: 1 }}>
                 {item.label}

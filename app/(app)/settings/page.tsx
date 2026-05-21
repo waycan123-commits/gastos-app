@@ -70,7 +70,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="page-shell">
-        <div className="empty-state"><p style={{ color: 'var(--text-muted)' }}>Cargando...</p></div>
+        <div className="card card-glass empty-state"><p style={{ color: 'var(--text-muted)' }}>Cargando...</p></div>
       </div>
     )
   }
@@ -84,7 +84,7 @@ export default function SettingsPage() {
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Financial profile */}
-        <div className="card anim-fade-up d1" style={{ padding: '20px 18px' }}>
+        <div className="card card-glass anim-fade-up d1" style={{ padding: '20px 18px' }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>💰</span> Perfil financiero
           </p>
@@ -137,18 +137,18 @@ export default function SettingsPage() {
       </form>
 
       {/* PWA install */}
-      <div className="card anim-fade-up d3" style={{ padding: '18px 18px', marginTop: 16 }}>
+      <div className="card card-glass anim-fade-up d3" style={{ padding: '18px 18px', marginTop: 16 }}>
         <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>📱</span> Instalar como app (PWA)
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-green)', marginBottom: 3 }}>Android · Chrome</p>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
               Menú ⋮ → <strong style={{ color: 'var(--text-secondary)' }}>"Añadir a pantalla de inicio"</strong>
             </p>
           </div>
-          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '12px 14px' }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 3 }}>iPhone · Safari</p>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
               Botón compartir ↑ → <strong style={{ color: 'var(--text-secondary)' }}>"Añadir a inicio"</strong>
@@ -158,7 +158,7 @@ export default function SettingsPage() {
       </div>
 
       {/* About */}
-      <div className="card anim-fade-up d4" style={{ padding: '18px 18px', marginTop: 12 }}>
+      <div className="card card-glass anim-fade-up d4" style={{ padding: '18px 18px', marginTop: 12 }}>
         <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>ℹ️</span> Acerca de la app
         </p>

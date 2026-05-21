@@ -92,7 +92,7 @@ export default function AccountsPage() {
 
   return (
     <Shell>
-      <div className="page-header">
+      <div className="page-header anim-fade-up d0">
         <div>
           <h1 className="page-title">Cuentas</h1>
           <p className="page-subtitle">{accounts.filter(a => a.is_active).length} activas</p>
@@ -101,7 +101,7 @@ export default function AccountsPage() {
       </div>
 
       {accounts.length > 0 && (
-        <div className="card metric-card anim-fade-up d0" style={{ marginBottom: 16 }}>
+        <div className="card card-glass metric-card anim-fade-up d1" style={{ marginBottom: 16 }}>
           <p className="metric-label">Saldo total disponible</p>
           <p className="metric-value" style={{ color: 'var(--accent-green)' }}>
             {formatCurrency(totalBalance, 'PEN')}
@@ -111,7 +111,7 @@ export default function AccountsPage() {
       )}
 
       {accounts.length === 0 ? (
-        <div className="card empty-state">
+        <div className="card card-glass empty-state anim-fade-up d1">
           <div className="empty-state-icon">🏦</div>
           <p className="empty-state-title">Sin cuentas registradas</p>
           <p className="empty-state-desc">Agrega tus cuentas bancarias, billeteras o efectivo para tener un control completo.</p>
@@ -122,11 +122,11 @@ export default function AccountsPage() {
             const typeInfo = ACCOUNT_TYPES.find(t => t.value === acc.type)
             const monthSpent = getAccMonthSpent(acc.id)
             return (
-              <div key={acc.id} className={`card anim-fade-up d${Math.min(idx + 1, 5)}`} style={{ overflow: 'hidden', opacity: acc.is_active ? 1 : 0.55 }}>
+              <div key={acc.id} className={`card card-glass anim-fade-up d${Math.min(idx + 1, 5)}`} style={{ overflow: 'hidden', opacity: acc.is_active ? 1 : 0.55 }}>
                 <div style={{ padding: '16px 18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 14, background: 'linear-gradient(145deg, rgba(90,169,255,0.20), rgba(103,232,249,0.08))', border: '1px solid rgba(151,181,225,0.16)', boxShadow: 'var(--glow-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
                         {typeInfo?.icon || '💼'}
                       </div>
                       <div>
@@ -157,7 +157,7 @@ export default function AccountsPage() {
                   {acc.note && <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>{acc.note}</p>}
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.025)' }}>
                   <button className="btn-ghost" onClick={() => openEdit(acc)} style={{ flex: 1, fontSize: 13, padding: '8px' }}>Editar</button>
                   <button className="btn-ghost" onClick={() => handleToggle(acc)} style={{ flex: 1, fontSize: 13, padding: '8px' }}>
                     {acc.is_active ? 'Desactivar' : 'Activar'}

@@ -138,7 +138,7 @@ export default function RecurringPage() {
 
   return (
     <Shell>
-      <div className="page-header">
+      <div className="page-header anim-fade-up d0">
         <div>
           <h1 className="page-title">Recurrentes</h1>
           <p className="page-subtitle">{activeRecs.length} activos</p>
@@ -147,7 +147,7 @@ export default function RecurringPage() {
       </div>
 
       {activeRecs.length > 0 && (
-        <div className="card metric-card anim-fade-up d0" style={{ marginBottom: 16 }}>
+        <div className="card card-glass metric-card anim-fade-up d1" style={{ marginBottom: 16 }}>
           <p className="metric-label">Total mensual estimado</p>
           <p className="metric-value" style={{ color: 'var(--accent-amber)' }}>
             {formatCurrency(monthlyTotal, currency)}
@@ -157,7 +157,7 @@ export default function RecurringPage() {
       )}
 
       {recurring.length === 0 ? (
-        <div className="card empty-state">
+        <div className="card card-glass empty-state anim-fade-up d1">
           <div className="empty-state-icon">🔄</div>
           <p className="empty-state-title">Sin gastos recurrentes</p>
           <p className="empty-state-desc">Registra Netflix, servicios, suscripciones y cuotas para anticipar tus gastos.</p>
@@ -169,11 +169,11 @@ export default function RecurringPage() {
             const days = daysUntil(nextDate)
             const soon = days <= 5
             return (
-              <div key={r.id} className={`card anim-fade-up d${Math.min(idx + 1, 5)}`} style={{ overflow: 'hidden', opacity: r.is_active ? 1 : 0.5 }}>
+              <div key={r.id} className={`card card-glass anim-fade-up d${Math.min(idx + 1, 5)}`} style={{ overflow: 'hidden', opacity: r.is_active ? 1 : 0.5 }}>
                 <div style={{ padding: '16px 18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: `${r.category?.color || '#6b7280'}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 14, background: `linear-gradient(145deg, ${r.category?.color || '#6b7280'}24, rgba(255,255,255,0.035))`, border: `1px solid ${r.category?.color || '#6b7280'}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
                         {r.category?.icon || '🔄'}
                       </div>
                       <div>
@@ -190,14 +190,14 @@ export default function RecurringPage() {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div style={{ background: 'var(--bg-surface)', borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '10px 12px' }}>
                       <p style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Próximo cobro</p>
                       <p style={{ fontSize: 14, fontWeight: 600, color: soon ? 'var(--accent-amber)' : 'var(--text-primary)', marginTop: 3 }}>
                         {soon ? `⚠️ ` : ''}{days === 0 ? 'Hoy' : `en ${days} días`}
                       </p>
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Día {r.charge_day} del mes</p>
                     </div>
-                    <div style={{ background: 'var(--bg-surface)', borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '10px 12px' }}>
                       <p style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pago via</p>
                       <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginTop: 3 }}>{r.payment_method}</p>
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
@@ -207,7 +207,7 @@ export default function RecurringPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 6, padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.025)', flexWrap: 'wrap' }}>
                   <button className="btn-ghost" onClick={() => openEdit(r)} style={{ flex: 1, minWidth: 72, fontSize: 12, padding: '7px 10px' }}>Editar</button>
                   <button className="btn-ghost" onClick={() => handleToggle(r)} style={{ flex: 1, minWidth: 72, fontSize: 12, padding: '7px 10px' }}>
                     {r.is_active ? 'Pausar' : 'Activar'}

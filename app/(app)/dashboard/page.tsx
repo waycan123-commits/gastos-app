@@ -28,7 +28,7 @@ export default async function DashboardPage() {
   if (!profile) {
     return (
       <div className="page-shell">
-        <div className="card" style={{ padding: '40px 28px', textAlign: 'center', marginTop: 24 }}>
+        <div className="card card-glass anim-fade-up d0" style={{ padding: '40px 28px', textAlign: 'center', marginTop: 24 }}>
           <p style={{ fontSize: 48, marginBottom: 16 }}>🎯</p>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Configura tu perfil</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
@@ -73,13 +73,13 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="anim-fade-up d0" style={{ marginBottom: 20, paddingTop: 4 }}>
         <p className="label-caps" style={{ marginBottom: 4 }}>{monthLabel}</p>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.4px' }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: 0, lineHeight: 1.12 }}>
           Resumen financiero
         </h1>
       </div>
 
       {/* Alert pill */}
-      <div className={`anim-fade-up d1 ${alertStyle.bg}`} style={{ borderRadius: 12, padding: '11px 15px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className={`anim-fade-up d1 ${alertStyle.bg}`} style={{ borderRadius: 16, padding: '12px 15px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 9, boxShadow: 'var(--shadow-card)', backdropFilter: 'blur(16px)' }}>
         <span style={{ fontSize: 16 }}>{alertEmoji}</span>
         <span style={{ fontSize: 13, fontWeight: 600, color: alertStyle.text }}>
           {getAlertMessage(metrics)}
@@ -88,12 +88,12 @@ export default async function DashboardPage() {
 
       {/* Main metrics 2x2 */}
       <div className="anim-fade-up d1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-        <div className="metric-card">
+        <div className="metric-card card-glass">
           <p className="metric-label">Gastado</p>
           <p className="metric-value" style={{ color: 'var(--accent-rose)' }}>{formatCurrency(metrics.totalSpent, profile.currency)}</p>
           <p className="metric-sub">{metrics.percentageSpent.toFixed(0)}% del ingreso</p>
         </div>
-        <div className="metric-card">
+        <div className="metric-card card-glass">
           <p className="metric-label">Disponible</p>
           <p className="metric-value" style={{ color: metrics.remaining >= 0 ? 'var(--accent-green)' : 'var(--accent-rose)' }}>
             {formatCurrency(metrics.remaining, profile.currency)}
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Progress bar */}
-      <div className="card anim-fade-up d2" style={{ padding: '16px 18px', marginBottom: 10 }}>
+      <div className="card card-glass anim-fade-up d2" style={{ padding: '16px 18px', marginBottom: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-label)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Progreso mensual</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: alertStyle.text }}>{metrics.percentageSpent.toFixed(1)}%</span>
@@ -128,21 +128,21 @@ export default async function DashboardPage() {
       {(cards.length > 0 || accounts.length > 0 || recurring.length > 0) && (
         <div className="anim-fade-up d2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
           {cards.length > 0 && (
-            <div className="metric-card" style={{ padding: '13px 12px' }}>
+            <div className="metric-card card-glass" style={{ padding: '13px 12px' }}>
               <p className="metric-label">Tarjetas</p>
               <p className="metric-value" style={{ fontSize: 15, color: 'var(--accent-violet)' }}>{formatCurrency(metrics.creditCardSpentMonth, profile.currency)}</p>
               <p className="metric-sub">gasto en {cards.length} tarjeta{cards.length !== 1 ? 's' : ''}</p>
             </div>
           )}
           {accounts.length > 0 && (
-            <div className="metric-card" style={{ padding: '13px 12px' }}>
+            <div className="metric-card card-glass" style={{ padding: '13px 12px' }}>
               <p className="metric-label">Saldo ctrs.</p>
               <p className="metric-value" style={{ fontSize: 15, color: 'var(--accent-green)' }}>{formatCurrency(metrics.accountsBalance, profile.currency)}</p>
               <p className="metric-sub">{accounts.length} cuenta{accounts.length !== 1 ? 's' : ''}</p>
             </div>
           )}
           {recurring.length > 0 && (
-            <div className="metric-card" style={{ padding: '13px 12px' }}>
+            <div className="metric-card card-glass" style={{ padding: '13px 12px' }}>
               <p className="metric-label">Recurrentes</p>
               <p className="metric-value" style={{ fontSize: 15, color: 'var(--accent-amber)' }}>{formatCurrency(recurringTotal, profile.currency)}</p>
               <p className="metric-sub">/mes estimado</p>
@@ -153,7 +153,7 @@ export default async function DashboardPage() {
 
       {/* Ahorro estimado */}
       {metrics.savingsEstimated > 0 && (
-        <div className="anim-fade-up d3" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.18)', borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
+        <div className="card-glass anim-fade-up d3" style={{ background: 'linear-gradient(145deg, rgba(45,223,136,0.11), rgba(45,223,136,0.035))', border: '1px solid rgba(45,223,136,0.22)', borderRadius: 16, padding: '14px 16px', marginBottom: 10, boxShadow: 'var(--glow-green)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-green)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>💰 Ahorro estimado</p>
@@ -234,7 +234,7 @@ export default async function DashboardPage() {
       )}
 
       {/* Recent expenses */}
-      <div className="card anim-fade-up d4" style={{ overflow: 'hidden', marginBottom: 8 }}>
+      <div className="card card-glass anim-fade-up d4" style={{ overflow: 'hidden', marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
           <p className="label-caps">Gastos recientes</p>
           <Link href="/expenses" style={{ fontSize: 12, color: 'var(--accent-blue)', textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
@@ -268,7 +268,7 @@ export default async function DashboardPage() {
 
 function SmallMetric({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
-    <div className="metric-card" style={{ padding: '12px 10px', textAlign: 'center' }}>
+    <div className="metric-card card-glass" style={{ padding: '12px 10px', textAlign: 'center' }}>
       <p className="metric-label">{label}</p>
       <p className="metric-value" style={{ fontSize: 13, color: alert ? 'var(--accent-rose)' : 'var(--text-primary)' }}>{value}</p>
     </div>

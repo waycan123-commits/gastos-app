@@ -98,7 +98,7 @@ export default function CardsPage() {
 
   return (
     <Shell>
-      <div className="page-header">
+      <div className="page-header anim-fade-up d0">
         <div>
           <h1 className="page-title">Tarjetas</h1>
           <p className="page-subtitle">{cards.filter(c => c.is_active).length} activas</p>
@@ -107,14 +107,14 @@ export default function CardsPage() {
       </div>
 
       {cards.length === 0 ? (
-        <div className="card empty-state">
+        <div className="card card-glass empty-state anim-fade-up d1">
           <div className="empty-state-icon">💳</div>
           <p className="empty-state-title">Sin tarjetas registradas</p>
           <p className="empty-state-desc">Agrega tus tarjetas de crédito para controlar tu deuda y próximas fechas de pago.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {cards.map(card => {
+          {cards.map((card, idx) => {
             const monthSpent = getCardMonthSpent(card.id)
             const usagePct = card.credit_limit ? Math.min((card.current_balance / card.credit_limit) * 100, 100) : 0
             const nextClose = getNextOccurrence(card.billing_close_day)
@@ -124,15 +124,15 @@ export default function CardsPage() {
             const payUrgent = daysToPay <= 5
 
             return (
-              <div key={card.id} className="card" style={{ overflow: 'hidden', opacity: card.is_active ? 1 : 0.55 }}>
+              <div key={card.id} className={`card card-glass anim-fade-up d${Math.min(idx + 1, 5)}`} style={{ overflow: 'hidden', opacity: card.is_active ? 1 : 0.55 }}>
                 {/* Card header */}
-                <div style={{ background: `linear-gradient(135deg, ${card.color}22, ${card.color}10)`, padding: '18px 18px 14px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ background: `radial-gradient(circle at 90% 0%, ${card.color}33, transparent 36%), linear-gradient(135deg, ${card.color}24, rgba(255,255,255,0.018))`, padding: '18px 18px 14px', borderBottom: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <p style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{card.name}</p>
                       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{card.bank} · {card.currency}</p>
                     </div>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: card.color + '33', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💳</div>
+                    <div style={{ width: 38, height: 38, borderRadius: 14, background: card.color + '33', border: `1px solid ${card.color}55`, boxShadow: `0 0 22px ${card.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💳</div>
                   </div>
 
                   {card.credit_limit && (
@@ -180,7 +180,7 @@ export default function CardsPage() {
                 )}
 
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.025)' }}>
                   <button className="btn-ghost" onClick={() => openEdit(card)} style={{ flex: 1, fontSize: 13, padding: '8px' }}>Editar</button>
                   <button className="btn-ghost" onClick={() => handleToggle(card)} style={{ flex: 1, fontSize: 13, padding: '8px' }}>
                     {card.is_active ? 'Desactivar' : 'Activar'}

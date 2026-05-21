@@ -134,7 +134,7 @@ export default function ExpensesPage() {
 
   return (
     <Shell>
-      <div className="page-header">
+      <div className="page-header anim-fade-up d0">
         <div>
           <h1 className="page-title">Gastos</h1>
           <p className="page-subtitle">{expenses.length} registros</p>
@@ -145,23 +145,23 @@ export default function ExpensesPage() {
       </div>
 
       {/* Search */}
-      <div style={{ marginBottom: 16 }}>
+      <div className="anim-fade-up d1" style={{ marginBottom: 16 }}>
         <input className="input-field" placeholder="Buscar gastos..." value={filter} onChange={e => setFilter(e.target.value)} style={{ fontSize: 15 }} />
       </div>
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div className="card empty-state">
+        <div className="card card-glass empty-state anim-fade-up d2">
           <div className="empty-state-icon">💸</div>
           <p className="empty-state-title">Sin gastos registrados</p>
           <p className="empty-state-desc">Toca "+ Nuevo" para agregar tu primer gasto.</p>
         </div>
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="card card-glass anim-fade-up d2" style={{ overflow: 'hidden' }}>
           {filtered.map((exp, i) => (
             <div key={exp.id} className="list-row" style={{ gap: 12, justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${exp.category?.color || '#6b7280'}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 14, background: `linear-gradient(145deg, ${exp.category?.color || '#6b7280'}24, rgba(255,255,255,0.035))`, border: `1px solid ${exp.category?.color || '#6b7280'}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
                   {exp.category?.icon || '📦'}
                 </div>
                 <div style={{ minWidth: 0 }}>
