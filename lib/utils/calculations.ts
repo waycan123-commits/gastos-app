@@ -1,4 +1,4 @@
-import { Expense, DashboardMetrics, AlertLevel } from '@/lib/supabase/types'
+import { Expense, DashboardMetrics, AlertLevel, RecurringExpense, Account } from '@/lib/supabase/types'
 import { getDaysInMonth, getDate, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns'
 
 export function getMonthExpenses(expenses: Expense[], financialDayStart: number = 1): Expense[] {
@@ -33,10 +33,25 @@ export function getMonthExpenses(expenses: Expense[], financialDayStart: number 
   })
 }
 
+export function getMonthlyRecurringTotal(recurringExpenses: RecurringExpense[]): number {
+  return recurringExpenses
+    .filter(r => r.is_active)
+    .reduce((sum, r) => {
+      const base = r.amount
+      if (r.frequency === 'mensual') return sum + base
+      if (r.frequency === 'quincenal') return sum + base * 2
+      if (r.frequency === 'semanal') return sum + base * 4.33
+      if (r.frequency === 'anual') return sum + base / 12
+      return sum + base
+    }, 0)
+}
+
 export function calculateMetrics(
   expenses: Expense[],
   monthlyIncome: number,
-  financialDayStart: number = 1
+  financialDayStart: number = 1,
+  recurringExpenses: RecurringExpense[] = [],
+  accounts: Account[] = []
 ): DashboardMetrics {
   const today = new Date()
   const totalDays = getDaysInMonth(today)
@@ -60,6 +75,23 @@ export function calculateMetrics(
   })
   const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] || '-'
 
+  // Credit card spent this month
+  const creditCardSpentMonth = monthExpenses
+    .filter(e => e.credit_card_id || e.payment_method === 'crédito')
+    .reduce((sum, e) => sum + e.amount, 0)
+
+  // Total accounts balance
+  const accountsBalance = accounts
+    .filter(a => a.is_active)
+    .reduce((sum, a) => sum + a.current_balance, 0)
+
+  // Recurring
+  const recurringEstimatedMonth = getMonthlyRecurringTotal(recurringExpenses)
+  const recurringPercentOfIncome = monthlyIncome > 0 ? (recurringEstimatedMonth / monthlyIncome) * 100 : 0
+
+  // Savings estimate
+  const savingsEstimated = monthlyIncome - monthlyProjection
+
   // Alert level
   let alertLevel: AlertLevel = 'green'
   if (monthlyIncome <= 0) {
@@ -75,79 +107,81 @@ export function calculateMetrics(
   }
 
   return {
-    totalSpent,
-    remaining,
-    percentageSpent,
-    dailyAverage,
-    recommendedDaily,
-    topCategory,
-    monthlyProjection,
-    alertLevel,
-    daysRemaining,
-    currentDay,
-    totalDays,
+    totalSpent, remaining, percentageSpent, dailyAverage, recommendedDaily,
+    topCategory, monthlyProjection, alertLevel, daysRemaining, currentDay, totalDays,
+    creditCardSpentMonth, accountsBalance, recurringEstimatedMonth, savingsEstimated,
+    recurringPercentOfIncome,
   }
 }
 
-export function getAlertColor(level: AlertLevel): string {
+export function getAlertStyle(level: AlertLevel): { bg: string; text: string; bar: string } {
   switch (level) {
-    case 'green': return 'text-emerald-400'
-    case 'yellow': return 'text-yellow-400'
-    case 'orange': return 'text-orange-400'
-    case 'red': return 'text-red-400'
-    case 'critical': return 'text-red-600'
-    default: return 'text-emerald-400'
+    case 'green':    return { bg: 'alert-green',    text: '#22c55e', bar: '#22c55e' }
+    case 'yellow':   return { bg: 'alert-yellow',   text: '#f59e0b', bar: '#f59e0b' }
+    case 'orange':   return { bg: 'alert-orange',   text: '#f97316', bar: '#f97316' }
+    case 'red':      return { bg: 'alert-red',      text: '#f43f5e', bar: '#f43f5e' }
+    case 'critical': return { bg: 'alert-critical', text: '#ef4444', bar: '#ef4444' }
+    default:         return { bg: 'alert-green',    text: '#22c55e', bar: '#22c55e' }
   }
 }
 
-export function getAlertBg(level: AlertLevel): string {
-  switch (level) {
-    case 'green': return 'bg-emerald-500/20 border-emerald-500/30'
-    case 'yellow': return 'bg-yellow-500/20 border-yellow-500/30'
-    case 'orange': return 'bg-orange-500/20 border-orange-500/30'
-    case 'red': return 'bg-red-500/20 border-red-500/30'
-    case 'critical': return 'bg-red-700/30 border-red-600/50'
-    default: return 'bg-emerald-500/20 border-emerald-500/30'
-  }
-}
-
-export function getAlertProgressColor(level: AlertLevel): string {
-  switch (level) {
-    case 'green': return 'bg-emerald-400'
-    case 'yellow': return 'bg-yellow-400'
-    case 'orange': return 'bg-orange-400'
-    case 'red': return 'bg-red-400'
-    case 'critical': return 'bg-red-600'
-    default: return 'bg-emerald-400'
-  }
-}
+// Keep old helpers for backwards compat
+export function getAlertColor(level: AlertLevel): string { return getAlertStyle(level).text }
+export function getAlertBg(level: AlertLevel): string { return getAlertStyle(level).bg }
+export function getAlertProgressColor(level: AlertLevel): string { return getAlertStyle(level).bar }
 
 export function formatCurrency(amount: number, currency: string = 'PEN'): string {
-  return new Intl.NumberFormat('es-PE', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount)
+  try {
+    return new Intl.NumberFormat('es-PE', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+    }).format(amount)
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`
+  }
 }
 
 export function getRecommendations(
   metrics: DashboardMetrics,
   monthlyIncome: number,
-  currency: string
+  currency: string,
+  nextCardPaymentDays?: number
 ): string[] {
   const recs: string[] = []
-  const { totalSpent, remaining, percentageSpent, recommendedDaily, topCategory, monthlyProjection, daysRemaining } = metrics
+  const { totalSpent, remaining, percentageSpent, recommendedDaily, topCategory,
+    monthlyProjection, daysRemaining, recurringPercentOfIncome, savingsEstimated,
+    accountsBalance, dailyAverage } = metrics
 
   if (topCategory !== '-') {
     recs.push(`Tu mayor gasto este mes es ${topCategory}.`)
   }
 
+  if (recurringPercentOfIncome > 40) {
+    recs.push(`Tus gastos recurrentes representan el ${recurringPercentOfIncome.toFixed(0)}% de tu ingreso mensual.`)
+  }
+
   if (daysRemaining > 0 && remaining > 0) {
-    recs.push(`Te quedan ${daysRemaining} días del mes y puedes gastar aproximadamente ${formatCurrency(recommendedDaily, currency)} por día.`)
+    recs.push(`Te quedan ${daysRemaining} días del mes y puedes gastar ${formatCurrency(recommendedDaily, currency)}/día.`)
   }
 
   if (monthlyProjection > monthlyIncome) {
-    recs.push(`⚠️ Cuidado: tu proyección mensual (${formatCurrency(monthlyProjection, currency)}) supera tu ingreso.`)
+    recs.push(`⚠️ Tu gasto proyectado (${formatCurrency(monthlyProjection, currency)}) supera tu ingreso mensual.`)
+  }
+
+  if (savingsEstimated > 0) {
+    recs.push(`Si mantienes este ritmo, ahorrarías aproximadamente ${formatCurrency(savingsEstimated, currency)} este mes.`)
+  }
+
+  if (accountsBalance > 0 && dailyAverage > 0) {
+    const daysOfCash = accountsBalance / dailyAverage
+    if (daysOfCash < 7) {
+      recs.push(`Tu saldo disponible en cuentas alcanza solo para ~${Math.floor(daysOfCash)} días al ritmo actual.`)
+    }
+  }
+
+  if (nextCardPaymentDays !== undefined && nextCardPaymentDays <= 5) {
+    recs.push(`Tu próxima fecha de pago de tarjeta está en ${nextCardPaymentDays} días.`)
   }
 
   if (percentageSpent >= 90 && percentageSpent < 100) {
@@ -155,8 +189,29 @@ export function getRecommendations(
   }
 
   if (totalSpent > monthlyIncome) {
-    recs.push(`🔴 Has superado tu ingreso mensual. Revisa tus gastos con urgencia.`)
+    recs.push(`🔴 Has superado tu ingreso mensual. Revisa tus finanzas con urgencia.`)
   }
 
   return recs
+}
+
+export function getNextOccurrence(chargeDay: number): Date {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const day = today.getDate()
+
+  if (day <= chargeDay) {
+    return new Date(year, month, chargeDay)
+  } else {
+    return new Date(year, month + 1, chargeDay)
+  }
+}
+
+export function daysUntil(date: Date): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(date)
+  target.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }

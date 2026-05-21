@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Category, CategoryBudget } from '@/lib/supabase/types'
 import { DEFAULT_CATEGORIES } from '@/lib/utils/classifier'
@@ -16,10 +16,9 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', color: '#6b7280' })
-
   const currentMonth = format(new Date(), 'yyyy-MM')
 
-  async function load() {
+  const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const [catRes, budRes, profRes] = await Promise.all([
@@ -31,14 +30,12 @@ export default function CategoriesPage() {
     setBudgets(budRes.data || [])
     setCurrency(profRes.data?.currency || 'PEN')
     const eb: Record<string, string> = {}
-    ;(budRes.data || []).forEach((b: CategoryBudget) => {
-      eb[b.category_id] = String(b.budget_amount)
-    })
+    ;(budRes.data || []).forEach((b: CategoryBudget) => { eb[b.category_id] = String(b.budget_amount) })
     setEditBudget(eb)
     setLoading(false)
-  }
+  }, [currentMonth])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   async function saveBudget(categoryId: string) {
     setSaving(categoryId)
@@ -58,8 +55,9 @@ export default function CategoriesPage() {
   async function initDefaults() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const inserts = DEFAULT_CATEGORIES.map(c => ({ user_id: user.id, name: c.name, icon: c.icon, color: c.color, is_default: true }))
-    await supabase.from('categories').insert(inserts)
+    await supabase.from('categories').insert(
+      DEFAULT_CATEGORIES.map(c => ({ user_id: user.id, name: c.name, icon: c.icon, color: c.color, is_default: true }))
+    )
     load()
   }
 
@@ -79,55 +77,64 @@ export default function CategoriesPage() {
     setCategories(c => c.filter(x => x.id !== id))
   }
 
-  if (loading) return <Shell><div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando...</div></Shell>
+  if (loading) return <Shell><div className="empty-state"><p style={{ color: 'var(--text-muted)' }}>Cargando...</p></div></Shell>
 
   return (
     <Shell>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Categorías</h1>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Categorías</h1>
+          <p className="page-subtitle">Presupuesto {format(new Date(), 'MMMM yyyy')}</p>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {categories.length === 0 && (
             <button className="btn-ghost" onClick={initDefaults} style={{ fontSize: 12, padding: '8px 12px' }}>
-              Crear predeterminadas
+              Predeterminadas
             </button>
           )}
-          <button className="btn-primary" onClick={() => setShowAdd(!showAdd)} style={{ fontSize: 12, padding: '8px 14px' }}>
+          <button className="btn-primary" onClick={() => setShowAdd(!showAdd)} style={{ fontSize: 13, padding: '9px 14px' }}>
             {showAdd ? '✕' : '+ Nueva'}
           </button>
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-        Presupuesto para <strong style={{ color: 'var(--text-secondary)' }}>{format(new Date(), 'MMMM yyyy')}</strong> · Opcional
-      </p>
-
+      {/* New category form */}
       {showAdd && (
-        <div className="card animate-fade-up" style={{ padding: 20, marginBottom: 16 }}>
+        <div className="card anim-slide-up" style={{ padding: 18, marginBottom: 14 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14 }}>Nueva categoría</p>
           <form onSubmit={addCategory} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px 52px', gap: 10 }}>
               <div>
-                <Label>Nombre</Label>
-                <input className="input-field" placeholder="Nueva categoría" value={newCat.name} onChange={e => setNewCat(n => ({ ...n, name: e.target.value }))} required />
+                <label className="form-label">Nombre</label>
+                <input className="input-field" placeholder="Ej. Mascotas" value={newCat.name} onChange={e => setNewCat(n => ({ ...n, name: e.target.value }))} required />
               </div>
               <div>
-                <Label>Emoji</Label>
-                <input className="input-field" placeholder="🏷️" value={newCat.icon} onChange={e => setNewCat(n => ({ ...n, icon: e.target.value }))} style={{ textAlign: 'center', fontSize: 18 }} />
+                <label className="form-label">Emoji</label>
+                <input className="input-field" placeholder="🏷️" value={newCat.icon} onChange={e => setNewCat(n => ({ ...n, icon: e.target.value }))} style={{ textAlign: 'center', fontSize: 20, padding: '10px 6px' }} />
               </div>
               <div>
-                <Label>Color</Label>
-                <input type="color" value={newCat.color} onChange={e => setNewCat(n => ({ ...n, color: e.target.value }))} style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-surface)', cursor: 'pointer', padding: 4 }} />
+                <label className="form-label">Color</label>
+                <input type="color" value={newCat.color} onChange={e => setNewCat(n => ({ ...n, color: e.target.value }))}
+                  style={{ width: '100%', height: 44, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-surface)', cursor: 'pointer', padding: 4 }} />
               </div>
             </div>
-            <button type="submit" className="btn-primary" style={{ padding: '9px 16px', fontSize: 13 }}>Guardar categoría</button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" className="btn-ghost" onClick={() => setShowAdd(false)} style={{ flex: 1, fontSize: 13 }}>Cancelar</button>
+              <button type="submit" className="btn-primary" style={{ flex: 2, fontSize: 13 }}>Guardar</button>
+            </div>
           </form>
         </div>
       )}
 
+      {/* Empty state */}
       {categories.length === 0 ? (
-        <div className="card" style={{ padding: 40, textAlign: 'center' }}>
-          <p style={{ fontSize: 32, marginBottom: 12 }}>🏷️</p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>No hay categorías.</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Crea las categorías predeterminadas o agrega una nueva.</p>
+        <div className="card empty-state">
+          <div className="empty-state-icon">🏷️</div>
+          <p className="empty-state-title">Sin categorías</p>
+          <p className="empty-state-desc">Crea las categorías predeterminadas o agrega una personalizada.</p>
+          <button className="btn-primary" onClick={initDefaults} style={{ marginTop: 16, fontSize: 14, padding: '10px 20px' }}>
+            Crear predeterminadas
+          </button>
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
@@ -135,35 +142,50 @@ export default function CategoriesPage() {
             const budget = budgets.find(b => b.category_id === cat.id)
             const budgetVal = editBudget[cat.id] ?? (budget ? String(budget.budget_amount) : '')
             return (
-              <div key={cat.id} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '14px 16px',
-                borderBottom: i < categories.length - 1 ? '1px solid var(--border)' : 'none',
-              }}>
-                <span style={{ fontSize: 22, width: 32, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
+              <div key={cat.id} className="list-row" style={{ gap: 12 }}>
+                {/* Icon */}
+                <div style={{ width: 38, height: 38, borderRadius: 11, background: `${cat.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                  {cat.icon}
+                </div>
+
+                {/* Name + budget input */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{cat.name}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{cat.name}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <input
-                      type="number"
-                      placeholder="Sin presupuesto"
+                      type="number" placeholder="Sin límite"
                       value={budgetVal}
                       onChange={e => setEditBudget(eb => ({ ...eb, [cat.id]: e.target.value }))}
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 12, color: 'var(--text-primary)', width: 120, outline: 'none', fontFamily: 'var(--font-mono)' }}
+                      style={{
+                        width: 110, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                        borderRadius: 8, padding: '5px 9px', fontSize: 13, color: 'var(--text-primary)',
+                        outline: 'none', fontFamily: 'var(--font-mono)',
+                      }}
                     />
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currency}/mes</span>
-                    <button onClick={() => saveBudget(cat.id)} disabled={saving === cat.id}
-                      style={{ background: 'var(--accent-blue)', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: saving === cat.id ? 0.5 : 1 }}>
-                      {saving === cat.id ? '...' : 'Guardar'}
+                    <button
+                      onClick={() => saveBudget(cat.id)}
+                      disabled={saving === cat.id}
+                      style={{
+                        background: 'var(--accent-blue)', color: '#fff', border: 'none',
+                        borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 700,
+                        cursor: 'pointer', opacity: saving === cat.id ? 0.5 : 1,
+                      }}
+                    >
+                      {saving === cat.id ? '...' : 'OK'}
                     </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
+
+                {/* Color dot + delete */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <div className="color-dot" style={{ background: cat.color }} />
                   {!cat.is_default && (
-                    <button onClick={() => deleteCategory(cat.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, padding: 4 }}>✕</button>
+                    <button className="btn-icon" onClick={() => deleteCategory(cat.id)} style={{ color: 'var(--accent-rose)' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                        <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/>
+                      </svg>
+                    </button>
                   )}
                 </div>
               </div>
@@ -176,9 +198,7 @@ export default function CategoriesPage() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: '20px 16px 0', maxWidth: 600, margin: '0 auto' }}>{children}</div>
+  return <div className="page-shell">{children}</div>
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{children}</label>
-}
+export const dynamic = 'force-dynamic'

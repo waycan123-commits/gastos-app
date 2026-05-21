@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0a0d14',
+  themeColor: '#0c0e15',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body style={{background:'var(--bg-base)'}}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
