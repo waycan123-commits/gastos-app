@@ -47,126 +47,134 @@ export default function ImportPage() {
     setImporting(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     const toImport = parsed.filter(t => t.selected)
-    const inserts = toImport.map(t => ({
-      user_id: user.id,
-      name: t.description,
-      category_id: t.categoryId,
-      amount: t.amount,
-      currency,
-      date: t.date,
-      payment_method: 'crédito',
-      note: 'Importado desde estado de cuenta',
-    }))
-
-    if (inserts.length > 0) {
-      await supabase.from('expenses').insert(inserts)
+    if (toImport.length > 0) {
+      await supabase.from('expenses').insert(toImport.map(t => ({
+        user_id: user.id, name: t.description, category_id: t.categoryId,
+        amount: t.amount, currency, date: t.date,
+        payment_method: 'crédito', note: 'Importado desde estado de cuenta',
+      })))
     }
-
-    // Log the import
     await supabase.from('statement_imports').insert({
-      user_id: user.id,
-      raw_text: text.slice(0, 2000),
-      transactions_count: inserts.length,
+      user_id: user.id, raw_text: text.slice(0, 2000), transactions_count: toImport.length,
     })
-
-    setImported(inserts.length)
+    setImported(toImport.length)
     setStep('done')
     setImporting(false)
   }
 
-  function reset() {
-    setText('')
-    setParsed([])
-    setStep('input')
-    setImported(0)
-  }
+  function reset() { setText(''); setParsed([]); setStep('input'); setImported(0) }
 
   return (
-    <div style={{ padding: '20px 16px 0', maxWidth: 600, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Importar tarjeta</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-          Pega texto de tu estado de cuenta para importar transacciones automáticamente.
-        </p>
+    <div className="page-shell">
+      <div className="anim-fade-up d0" style={{ marginBottom: 20 }}>
+        <h1 className="page-title">Importar tarjeta</h1>
+        <p className="page-subtitle">Pega texto de tu estado de cuenta</p>
       </div>
 
-      {/* Security warning */}
-      <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '12px 14px', marginBottom: 20 }}>
-        <p style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600, marginBottom: 4 }}>⚠️ Privacidad</p>
+      {/* Security notice */}
+      <div className="anim-fade-up d1" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 14, padding: '13px 15px', marginBottom: 16 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-amber)', marginBottom: 4 }}>⚠️ Privacidad importante</p>
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          No pegues datos sensibles como número completo de tarjeta, DNI, dirección o claves. <strong>Redacta esos datos antes</strong> de pegar el texto.
+          No pegues número completo de tarjeta, DNI, dirección ni contraseñas. <strong>Redacta esos datos antes</strong> de pegar el texto.
         </p>
       </div>
 
+      {/* Step indicator */}
+      <div className="anim-fade-up d1" style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {[['Pegar texto', 'input'], ['Revisar', 'review'], ['Listo', 'done']].map(([label, s], i) => {
+          const steps = ['input', 'review', 'done']
+          const current = steps.indexOf(step)
+          const stepIdx = steps.indexOf(s)
+          const active = step === s
+          const done = current > stepIdx
+          return (
+            <div key={s} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{
+                flex: 1, padding: '7px 8px', borderRadius: 8, textAlign: 'center',
+                background: active ? 'var(--accent-blue)' : done ? 'rgba(59,130,246,0.15)' : 'var(--bg-surface)',
+                border: `1px solid ${active ? 'var(--accent-blue)' : done ? 'rgba(59,130,246,0.3)' : 'var(--border)'}`,
+              }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: active ? '#fff' : done ? 'var(--accent-blue)' : 'var(--text-muted)' }}>
+                  {done ? '✓ ' : ''}{label}
+                </p>
+              </div>
+              {i < 2 && <div style={{ width: 12, height: 1, background: 'var(--border)', flexShrink: 0 }} />}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Step: input */}
       {step === 'input' && (
-        <div className="card animate-fade-up" style={{ padding: 20 }}>
-          <Label>Texto del estado de cuenta</Label>
+        <div className="card anim-fade-up d2" style={{ padding: 18 }}>
+          <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Texto del estado de cuenta</label>
           <textarea
             className="input-field"
-            placeholder={`Pega aquí el texto copiado de tu estado de cuenta.\n\nEjemplo:\n01/05/2025  WONG SURCO                    S/ 45.60\n02/05/2025  UBER TRIP                     S/ 12.50\n03/05/2025  NETFLIX                       S/ 35.90`}
+            placeholder={`Pega aquí el texto de tu banco.\n\nEjemplo:\n01/05/2025  WONG SURCO                S/ 45.60\n02/05/2025  UBER TRIP                  S/ 12.50\n03/05/2025  NETFLIX                    S/ 35.90`}
             value={text}
             onChange={e => setText(e.target.value)}
-            style={{ minHeight: 200, resize: 'vertical', lineHeight: 1.6 }}
+            style={{ minHeight: 200, resize: 'vertical', fontSize: 13 }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               {text.split('\n').filter(l => l.trim()).length} líneas
             </span>
             <button className="btn-primary" onClick={handleParse} disabled={!text.trim()}>
-              Analizar texto →
+              Analizar →
             </button>
           </div>
         </div>
       )}
 
+      {/* Step: review */}
       {step === 'review' && (
-        <div className="animate-fade-up">
+        <div className="anim-fade-up d1">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              Se detectaron <strong style={{ color: 'var(--text-primary)' }}>{parsed.length} transacciones</strong>
+              <strong style={{ color: 'var(--text-primary)' }}>{parsed.length}</strong> transacciones detectadas
             </p>
-            <button className="btn-ghost" onClick={reset} style={{ fontSize: 12, padding: '6px 12px' }}>← Volver</button>
+            <button className="btn-ghost" onClick={reset} style={{ fontSize: 12, padding: '7px 12px' }}>← Volver</button>
           </div>
 
           <div className="card" style={{ overflow: 'hidden', marginBottom: 16 }}>
             {parsed.map((t, i) => (
               <div key={i} style={{
-                padding: '14px 16px',
-                borderBottom: i < parsed.length - 1 ? '1px solid var(--border)' : 'none',
-                background: t.selected ? 'transparent' : 'rgba(0,0,0,0.2)',
+                padding: '13px 14px',
+                borderBottom: i < parsed.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                background: t.selected ? 'transparent' : 'rgba(0,0,0,0.15)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <input type="checkbox" checked={t.selected} onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, selected: e.target.checked } : x))}
-                    style={{ marginTop: 3, accentColor: 'var(--accent-blue)', cursor: 'pointer', width: 16, height: 16, flexShrink: 0 }} />
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <input
+                    type="checkbox" checked={t.selected}
+                    onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, selected: e.target.checked } : x))}
+                    style={{ marginTop: 4, accentColor: 'var(--accent-blue)', cursor: 'pointer', width: 16, height: 16, flexShrink: 0 }}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8, marginBottom: 8 }}>
                       <input
                         value={t.description}
                         onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font-display)' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 9px', fontSize: 13, color: 'var(--text-primary)', outline: 'none', minWidth: 0 }}
                       />
                       <input
-                        type="number"
-                        value={t.amount}
-                        onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) } : x))}
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', fontSize: 13, color: 'var(--accent-rose)', outline: 'none', width: 90, fontFamily: 'var(--font-mono)', textAlign: 'right' }}
+                        type="number" value={t.amount}
+                        onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 9px', fontSize: 13, color: 'var(--accent-rose)', outline: 'none', textAlign: 'right', fontFamily: 'var(--font-mono)' }}
                       />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                       <select
                         value={t.categoryId}
                         onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, categoryId: e.target.value } : x))}
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font-display)' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 9px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}
                       >
                         {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                       </select>
                       <input
-                        type="date"
-                        value={t.date}
+                        type="date" value={t.date}
                         onChange={e => setParsed(p => p.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', fontFamily: 'var(--font-display)' }}
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 9px', fontSize: 12, color: 'var(--text-primary)', outline: 'none' }}
                       />
                     </div>
                   </div>
@@ -179,37 +187,40 @@ export default function ImportPage() {
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
               {parsed.filter(t => t.selected).length} de {parsed.length} seleccionadas
             </span>
-            <button className="btn-primary" onClick={handleImport} disabled={importing || parsed.filter(t => t.selected).length === 0}>
-              {importing ? 'Importando...' : `Importar ${parsed.filter(t => t.selected).length} transacciones`}
+            <button
+              className="btn-primary"
+              onClick={handleImport}
+              disabled={importing || parsed.filter(t => t.selected).length === 0}
+            >
+              {importing ? 'Importando...' : `Importar ${parsed.filter(t => t.selected).length}`}
             </button>
           </div>
         </div>
       )}
 
+      {/* Step: done */}
       {step === 'done' && (
-        <div className="card animate-fade-up" style={{ padding: 40, textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <h2 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>¡Listo!</h2>
+        <div className="card anim-slide-up" style={{ padding: '44px 28px', textAlign: 'center' }}>
+          <p style={{ fontSize: 52, marginBottom: 16 }}>✅</p>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>¡Importado!</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            Se importaron <strong>{imported} transacciones</strong> correctamente.
+            Se registraron <strong>{imported} transacciones</strong> en tus gastos.
           </p>
-          <button className="btn-primary" onClick={reset} style={{ marginTop: 20 }}>
+          <button className="btn-primary" onClick={reset} style={{ marginTop: 24, padding: '11px 28px' }}>
             Importar más
           </button>
         </div>
       )}
 
       {/* OCR placeholder */}
-      <div style={{ marginTop: 20, background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '14px 16px' }}>
-        <p style={{ fontSize: 12, color: '#a5b4fc', fontWeight: 600, marginBottom: 4 }}>🔮 Próximamente</p>
+      <div className="anim-fade-up d4" style={{ marginTop: 16, background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 12, padding: '13px 15px' }}>
+        <p style={{ fontSize: 12, color: '#a78bfa', fontWeight: 700, marginBottom: 3 }}>🔮 Próximamente</p>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          Importación desde PDF o imagen de estado de cuenta usando OCR. Por ahora, copia y pega el texto manualmente.
+          Importación desde PDF o imagen de estado de cuenta (OCR). Por ahora, copia y pega el texto manualmente.
         </p>
       </div>
     </div>
   )
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>{children}</label>
-}
+export const dynamic = 'force-dynamic'

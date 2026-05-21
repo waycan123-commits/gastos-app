@@ -1,199 +1,291 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils/calculations'
-import { Expense, Category, Profile, PaymentMethod } from '@/lib/supabase/types'
+import { Expense, Category, Profile, PaymentMethod, CreditCard, Account } from '@/lib/supabase/types'
 
 const PAYMENT_METHODS: PaymentMethod[] = ['efectivo', 'débito', 'crédito', 'transferencia', 'otro']
+const CURRENCIES = ['PEN', 'USD', 'EUR', 'COP', 'MXN', 'ARS', 'CLP']
+
+type ExpenseForm = {
+  name: string
+  category_id: string
+  amount: string
+  currency: string
+  date: string
+  payment_method: PaymentMethod
+  note: string
+  account_id: string
+  credit_card_id: string
+}
+
+const emptyForm = (currency = 'PEN', catId = ''): ExpenseForm => ({
+  name: '', category_id: catId, amount: '', currency,
+  date: new Date().toISOString().split('T')[0],
+  payment_method: 'efectivo', note: '', account_id: '', credit_card_id: '',
+})
 
 export default function ExpensesPage() {
   const supabase = createClient()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [cards, setCards] = useState<CreditCard[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editExpense, setEditExpense] = useState<Expense | null>(null)
+  const [form, setForm] = useState<ExpenseForm>(emptyForm())
 
-  const [form, setForm] = useState({
-    name: '',
-    category_id: '',
-    amount: '',
-    currency: 'PEN',
-    date: new Date().toISOString().split('T')[0],
-    payment_method: 'efectivo' as PaymentMethod,
-    note: '',
-  })
-
-  async function load() {
+  const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const [expRes, catRes, profRes] = await Promise.all([
-      supabase.from('expenses').select('*, category:categories(*)').eq('user_id', user.id).order('date', { ascending: false }).limit(100),
+    const [expRes, catRes, profRes, cardsRes, accsRes] = await Promise.all([
+      supabase.from('expenses').select('*, category:categories(*), account:accounts(*), credit_card:credit_cards(*)')
+        .eq('user_id', user.id).order('date', { ascending: false }).limit(150),
       supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
       supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_active', true).order('name'),
+      supabase.from('accounts').select('*').eq('user_id', user.id).eq('is_active', true).order('name'),
     ])
     setExpenses(expRes.data || [])
     setCategories(catRes.data || [])
     setProfile(profRes.data)
-    if (catRes.data?.length) setForm(f => ({ ...f, category_id: catRes.data[0].id, currency: profRes.data?.currency || 'PEN' }))
+    setCards(cardsRes.data || [])
+    setAccounts(accsRes.data || [])
+    const defaultCur = profRes.data?.currency || 'PEN'
+    const defaultCat = catRes.data?.[0]?.id || ''
+    setForm(emptyForm(defaultCur, defaultCat))
     setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  function openNew() {
+    setEditExpense(null)
+    setForm(emptyForm(profile?.currency || 'PEN', categories[0]?.id || ''))
+    setShowForm(true)
   }
 
-  useEffect(() => { load() }, [])
+  function openEdit(exp: Expense) {
+    setEditExpense(exp)
+    setForm({
+      name: exp.name,
+      category_id: exp.category_id,
+      amount: String(exp.amount),
+      currency: exp.currency,
+      date: exp.date,
+      payment_method: exp.payment_method,
+      note: exp.note || '',
+      account_id: exp.account_id || '',
+      credit_card_id: exp.credit_card_id || '',
+    })
+    setShowForm(true)
+  }
+
+  function closeForm() { setShowForm(false); setEditExpense(null) }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    await supabase.from('expenses').insert({
-      user_id: user.id,
+
+    const payload = {
       name: form.name,
-      category_id: form.category_id,
+      category_id: form.category_id || null,
       amount: parseFloat(form.amount),
       currency: form.currency,
       date: form.date,
       payment_method: form.payment_method,
       note: form.note || null,
-    })
-    setForm({ name: '', category_id: categories[0]?.id || '', amount: '', currency: profile?.currency || 'PEN', date: new Date().toISOString().split('T')[0], payment_method: 'efectivo', note: '' })
-    setShowForm(false)
+      account_id: form.account_id || null,
+      credit_card_id: form.credit_card_id || null,
+      payment_source_type: form.credit_card_id ? 'credit_card' : form.account_id ? 'account' : 'none',
+    }
+
+    if (editExpense) {
+      await supabase.from('expenses').update(payload).eq('id', editExpense.id)
+    } else {
+      await supabase.from('expenses').insert({ ...payload, user_id: user.id })
+    }
+
     setSaving(false)
+    closeForm()
     load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este gasto?')) return
     await supabase.from('expenses').delete().eq('id', id)
-    setExpenses(e => e.filter(x => x.id !== id))
+    setExpenses(prev => prev.filter(x => x.id !== id))
   }
 
   const filtered = filter
-    ? expenses.filter(e => e.name.toLowerCase().includes(filter.toLowerCase()) || e.category?.name?.toLowerCase().includes(filter.toLowerCase()))
+    ? expenses.filter(e =>
+        e.name.toLowerCase().includes(filter.toLowerCase()) ||
+        e.category?.name?.toLowerCase().includes(filter.toLowerCase())
+      )
     : expenses
 
-  if (loading) return <PageShell><LoadingState /></PageShell>
+  if (loading) return <Shell><div className="empty-state"><p>Cargando...</p></div></Shell>
 
   return (
-    <PageShell>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>Gastos</h1>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)} style={{ padding: '8px 16px', fontSize: 13 }}>
-          {showForm ? '✕ Cancelar' : '+ Nuevo gasto'}
+    <Shell>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Gastos</h1>
+          <p className="page-subtitle">{expenses.length} registros</p>
+        </div>
+        <button className="btn-primary" onClick={openNew} style={{ padding: '9px 16px', fontSize: 14 }}>
+          + Nuevo
         </button>
       </div>
 
-      {/* Add expense form */}
-      {showForm && (
-        <div className="card animate-fade-up" style={{ padding: 20, marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Registrar gasto</h3>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <Label>Nombre / Descripción</Label>
-                <input className="input-field" placeholder="Ej. Almuerzo en el trabajo" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-              </div>
-              <div>
-                <Label>Categoría</Label>
-                <select className="input-field" value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))} required>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <Label>Monto</Label>
-                <input className="input-field" type="number" step="0.01" min="0" placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
-              </div>
-              <div>
-                <Label>Moneda</Label>
-                <select className="input-field" value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}>
-                  {['PEN','USD','EUR','COP','MXN','ARS','CLP'].map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <Label>Fecha</Label>
-                <input className="input-field" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
-              </div>
-              <div>
-                <Label>Método de pago</Label>
-                <select className="input-field" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}>
-                  {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <Label>Nota (opcional)</Label>
-              <input className="input-field" placeholder="Detalles adicionales..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
-            </div>
-            <button type="submit" className="btn-primary" disabled={saving} style={{ marginTop: 4 }}>
-              {saving ? 'Guardando...' : 'Guardar gasto'}
-            </button>
-          </form>
-        </div>
-      )}
-
       {/* Search */}
       <div style={{ marginBottom: 16 }}>
-        <input className="input-field" placeholder="🔍 Buscar gastos..." value={filter} onChange={e => setFilter(e.target.value)} />
+        <input className="input-field" placeholder="Buscar gastos..." value={filter} onChange={e => setFilter(e.target.value)} style={{ fontSize: 15 }} />
       </div>
 
-      {/* Expenses list */}
+      {/* List */}
       {filtered.length === 0 ? (
-        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No hay gastos registrados.</p>
+        <div className="card empty-state">
+          <div className="empty-state-icon">💸</div>
+          <p className="empty-state-title">Sin gastos registrados</p>
+          <p className="empty-state-desc">Toca "+ Nuevo" para agregar tu primer gasto.</p>
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
           {filtered.map((exp, i) => (
-            <div key={exp.id} style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '14px 16px',
-              borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 20, width: 32, textAlign: 'center' }}>{exp.category?.icon || '📦'}</span>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{exp.name}</p>
+            <div key={exp.id} className="list-row" style={{ gap: 12, justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${exp.category?.color || '#6b7280'}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                  {exp.category?.icon || '📦'}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{exp.name}</p>
                   <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {exp.category?.name} · {exp.date} · {exp.payment_method}
-                    {exp.note && ` · ${exp.note}`}
+                    {exp.category?.name || '—'} · {exp.date}
+                    {exp.credit_card && <span> · 💳 {exp.credit_card.name}</span>}
+                    {exp.account && <span> · 🏦 {exp.account.name}</span>}
                   </p>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
                   -{formatCurrency(exp.amount, exp.currency)}
                 </span>
-                <button onClick={() => handleDelete(exp.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '4px', borderRadius: 6, lineHeight: 1 }}
-                  title="Eliminar">✕</button>
+                <button className="btn-icon" onClick={() => openEdit(exp)} title="Editar" style={{ color: 'var(--accent-blue)' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button className="btn-icon" onClick={() => handleDelete(exp.id)} title="Eliminar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6M14,11v6"/><path d="M9,6V4a1,1,0,0,1,1-1h4a1,1,0,0,1,1,1v2"/>
+                  </svg>
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
-    </PageShell>
+
+      {/* Modal form */}
+      {showForm && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) closeForm() }}>
+          <div className="modal-sheet anim-slide-up">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {editExpense ? 'Editar gasto' : 'Nuevo gasto'}
+              </h2>
+              <button className="btn-icon" onClick={closeForm} style={{ fontSize: 18 }}>✕</button>
+            </div>
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="form-label">Nombre / Descripción</label>
+                <input className="input-field" placeholder="Ej. Almuerzo en el trabajo" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="form-label">Categoría</label>
+                  <select className="input-field" value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+                    <option value="">Sin categoría</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Método de pago</label>
+                  <select className="input-field" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}>
+                    {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="form-label">Monto</label>
+                  <input className="input-field" type="number" step="0.01" min="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required style={{ fontFamily: 'var(--font-mono)' }} />
+                </div>
+                <div>
+                  <label className="form-label">Moneda</label>
+                  <select className="input-field" value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}>
+                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="form-label">Fecha</label>
+                <input className="input-field" type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
+              </div>
+
+              {cards.length > 0 && (
+                <div>
+                  <label className="form-label">Tarjeta de crédito (opcional)</label>
+                  <select className="input-field" value={form.credit_card_id} onChange={e => setForm(f => ({ ...f, credit_card_id: e.target.value, account_id: e.target.value ? '' : f.account_id }))}>
+                    <option value="">— Ninguna —</option>
+                    {cards.map(c => <option key={c.id} value={c.id}>💳 {c.name} ({c.bank})</option>)}
+                  </select>
+                </div>
+              )}
+
+              {accounts.length > 0 && (
+                <div>
+                  <label className="form-label">Cuenta / Débito (opcional)</label>
+                  <select className="input-field" value={form.account_id} onChange={e => setForm(f => ({ ...f, account_id: e.target.value, credit_card_id: e.target.value ? '' : f.credit_card_id }))}>
+                    <option value="">— Ninguna —</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>🏦 {a.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="form-label">Nota (opcional)</label>
+                <input className="input-field" placeholder="Detalles adicionales..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button type="button" className="btn-ghost" onClick={closeForm} style={{ flex: 1 }}>Cancelar</button>
+                <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 2 }}>
+                  {saving ? 'Guardando...' : editExpense ? 'Guardar cambios' : 'Registrar gasto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </Shell>
   )
 }
 
-function PageShell({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: '20px 16px 0', maxWidth: 600, margin: '0 auto' }}>{children}</div>
+function Shell({ children }: { children: React.ReactNode }) {
+  return <div className="page-shell">{children}</div>
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{children}</label>
-}
-
-function LoadingState() {
-  return <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando...</div>
-}
+export const dynamic = 'force-dynamic'

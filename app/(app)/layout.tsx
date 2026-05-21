@@ -6,10 +6,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-      <main style={{ flex: 1, paddingBottom: 80 }}>
+      <main style={{ flex: 1, paddingBottom: 74 }}>
         {children}
       </main>
       <AppNav />
