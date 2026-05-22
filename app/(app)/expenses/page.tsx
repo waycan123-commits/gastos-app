@@ -37,6 +37,8 @@ export default function ExpensesPage() {
   const [filter, setFilter] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editExpense, setEditExpense] = useState<Expense | null>(null)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [form, setForm] = useState<ExpenseForm>(emptyForm())
 
   const load = useCallback(async () => {
@@ -50,6 +52,10 @@ export default function ExpensesPage() {
       supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('is_active', true).order('name'),
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('is_active', true).order('name'),
     ])
+    if (expRes.error) { console.error('Error loading expenses', expRes.error); setError('No se pudieron cargar los gastos.') }
+    if (catRes.error) console.error('Error loading categories', catRes.error)
+    if (cardsRes.error) console.error('Error loading cards', cardsRes.error)
+    if (accsRes.error) console.error('Error loading accounts', accsRes.error)
     setExpenses(expRes.data || [])
     setCategories(catRes.data || [])
     setProfile(profRes.data)
@@ -107,11 +113,15 @@ export default function ExpensesPage() {
     }
 
     if (editExpense) {
-      await supabase.from('expenses').update(payload).eq('id', editExpense.id)
+      const { error: saveError } = await supabase.from('expenses').update(payload).eq('id', editExpense.id)
+      if (saveError) { console.error('Error updating expense', saveError); setError('No se pudo guardar el gasto.'); setSaving(false); return }
     } else {
-      await supabase.from('expenses').insert({ ...payload, user_id: user.id })
+      const { error: saveError } = await supabase.from('expenses').insert({ ...payload, user_id: user.id })
+      if (saveError) { console.error('Error creating expense', saveError); setError('No se pudo registrar el gasto.'); setSaving(false); return }
     }
 
+    setMessage(editExpense ? 'Gasto actualizado.' : 'Gasto registrado.')
+    setTimeout(() => setMessage(''), 2600)
     setSaving(false)
     closeForm()
     load()
@@ -119,7 +129,8 @@ export default function ExpensesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este gasto?')) return
-    await supabase.from('expenses').delete().eq('id', id)
+    const { error: deleteError } = await supabase.from('expenses').delete().eq('id', id)
+    if (deleteError) { console.error('Error deleting expense', deleteError); setError('No se pudo eliminar el gasto.'); return }
     setExpenses(prev => prev.filter(x => x.id !== id))
   }
 
@@ -143,6 +154,8 @@ export default function ExpensesPage() {
           + Nuevo
         </button>
       </div>
+      {message && <div className="toast-success anim-fade-up d0">{message}</div>}
+      {error && <div className="toast-error anim-fade-up d0">{error}</div>}
 
       {/* Search */}
       <div className="anim-fade-up d1" style={{ marginBottom: 16 }}>
@@ -205,7 +218,7 @@ export default function ExpensesPage() {
               <button className="btn-icon" onClick={closeForm} style={{ fontSize: 18 }}>✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleSubmit} className="mobile-form">
               <div>
                 <label className="form-label">Nombre / Descripción</label>
                 <input className="input-field" placeholder="Ej. Almuerzo en el trabajo" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
@@ -270,7 +283,7 @@ export default function ExpensesPage() {
                 <input className="input-field" placeholder="Detalles adicionales..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <div className="form-actions">
                 <button type="button" className="btn-ghost" onClick={closeForm} style={{ flex: 1 }}>Cancelar</button>
                 <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 2 }}>
                   {saving ? 'Guardando...' : editExpense ? 'Guardar cambios' : 'Registrar gasto'}

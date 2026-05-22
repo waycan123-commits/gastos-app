@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import FinanceLogo from '@/components/brand/FinanceLogo'
 
 const NAV_ITEMS = [
   {
@@ -41,6 +42,15 @@ const NAV_ITEMS = [
           ? <path d="M2 7C2 5.9 2.9 5 4 5H20C21.1 5 22 5.9 22 7V8.5C22 9.6 21.1 10.5 20 10.5H4C2.9 10.5 2 9.6 2 8.5V7ZM3 10.5V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V10.5M7 14H9M12 14H14"/>
           : <><path d="M2 7C2 5.9 2.9 5 4 5H20C21.1 5 22 5.9 22 7V8.5"/><path d="M2 8.5C2 9.6 2.9 10.5 4 10.5H20C21.1 10.5 22 9.6 22 8.5"/><path d="M3 10.5V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V10.5"/><path d="M7 14H9"/></>
         }
+      </svg>
+    ),
+  },
+  {
+    href: '/income', label: 'Ingresos',
+    icon: (active: boolean) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3V21" />
+        <path d="M17 7.5C16.2 6.4 14.7 5.8 12.8 5.8H11.2C8.9 5.8 7.5 6.9 7.5 8.7C7.5 12.2 17 10.4 17 15.4C17 17.4 15.2 18.5 12.4 18.5H11.5C9.3 18.5 7.7 17.8 6.8 16.5" />
       </svg>
     ),
   },
@@ -87,6 +97,16 @@ export default function AppNav() {
         boxShadow: '0 22px 58px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.07)',
         pointerEvents: 'auto',
       }}>
+        <Link href="/dashboard" aria-label="Inicio" style={{
+          display: 'grid',
+          placeItems: 'center',
+          width: 44,
+          minWidth: 44,
+          textDecoration: 'none',
+          WebkitTapHighlightColor: 'transparent',
+        }}>
+          <FinanceLogo size={32} />
+        </Link>
         {NAV_ITEMS.map(item => {
           const active = pathname === item.href ||
             (item.href !== '/dashboard' && pathname.startsWith(item.href))

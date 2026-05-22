@@ -1,21 +1,25 @@
 import { createClient } from '@/lib/supabase/server'
-import { calculateMetrics, formatCurrency, getAlertStyle, getRecommendations, daysUntil, getNextOccurrence, getMonthlyRecurringTotal } from '@/lib/utils/calculations'
-import { Expense, Profile, CreditCard, Account, RecurringExpense } from '@/lib/supabase/types'
+import { calculateMetrics, formatCurrency, getAlertStyle, getRecommendations, daysUntil, getNextOccurrence, getMonthlyRecurringTotal, buildCashFlow } from '@/lib/utils/calculations'
+import { Expense, Profile, CreditCard, Account, RecurringExpense, IncomeSource, CashFlowEvent } from '@/lib/supabase/types'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
+import CashFlowChart from '@/components/dashboard/CashFlowChart'
+import FinanceLogo from '@/components/brand/FinanceLogo'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [profileRes, expensesRes, cardsRes, accountsRes, recurringRes] = await Promise.all([
+  const [profileRes, expensesRes, cardsRes, accountsRes, recurringRes, incomesRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', user!.id).single(),
     supabase.from('expenses').select('*, category:categories(*)')
       .eq('user_id', user!.id).order('date', { ascending: false }),
     supabase.from('credit_cards').select('*').eq('user_id', user!.id).eq('is_active', true).order('name'),
     supabase.from('accounts').select('*').eq('user_id', user!.id).eq('is_active', true).order('name'),
     supabase.from('recurring_expenses').select('*, category:categories(*)')
+      .eq('user_id', user!.id).eq('is_active', true),
+    supabase.from('income_sources').select('*, destination_account:accounts(*)')
       .eq('user_id', user!.id).eq('is_active', true),
   ])
 
@@ -24,6 +28,7 @@ export default async function DashboardPage() {
   const cards: CreditCard[] = cardsRes.data || []
   const accounts: Account[] = accountsRes.data || []
   const recurring: RecurringExpense[] = recurringRes.data || []
+  const incomes: IncomeSource[] = (incomesRes.data || []) as IncomeSource[]
 
   if (!profile) {
     return (
@@ -67,23 +72,106 @@ export default async function DashboardPage() {
   const alertEmoji = { green: '🟢', yellow: '🟡', orange: '🟠', red: '🔴', critical: '🚨' }[metrics.alertLevel] || '🟢'
 
   const recurringTotal = getMonthlyRecurringTotal(recurring)
+  const cashFlow = buildCashFlow(accounts, incomes, expenses, recurring, cards)
+  const primarySummary = cashFlow.summaries.find(s => s.currency === profile.currency) || cashFlow.summaries[0]
+  const primaryCurrency = primarySummary?.currency || profile.currency
+  const primaryPoints = cashFlow.pointsByCurrency[primaryCurrency] || []
+  const upcomingFlowEvents = cashFlow.events
+    .filter(event => event.status !== 'done')
+    .slice(0, 10)
 
   return (
     <div className="page-shell">
       {/* Header */}
-      <div className="anim-fade-up d0" style={{ marginBottom: 20, paddingTop: 4 }}>
-        <p className="label-caps" style={{ marginBottom: 4 }}>{monthLabel}</p>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: 0, lineHeight: 1.12 }}>
-          Resumen financiero
-        </h1>
+      <div className="anim-fade-up d0" style={{ marginBottom: 20, paddingTop: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <FinanceLogo size={42} />
+        <div>
+          <p className="label-caps" style={{ marginBottom: 4 }}>{monthLabel}</p>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: 0, lineHeight: 1.12 }}>
+            Pulso de caja
+          </h1>
+        </div>
+      </div>
+
+      {/* Cash flow pulse */}
+      {primarySummary && (
+        <div className="card card-glass anim-fade-up d1" style={{ padding: '18px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start', marginBottom: 14 }}>
+            <div>
+              <p className="label-caps" style={{ marginBottom: 6 }}>Dinero disponible hoy</p>
+              <p style={{ fontSize: 30, lineHeight: 1, fontWeight: 900, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                {formatCurrency(primarySummary.saldoActual, primarySummary.currency)}
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
+                Cierre estimado: <strong style={{ color: primarySummary.saldoEstimadoCierre >= 0 ? 'var(--accent-green)' : 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>{formatCurrency(primarySummary.saldoEstimadoCierre, primarySummary.currency)}</strong>
+              </p>
+            </div>
+            <div className={primarySummary.resultadoMes >= 0 ? 'badge badge-green' : 'badge badge-red'}>
+              {primarySummary.resultadoMes >= 0 ? 'A favor' : 'Déficit'}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <PulseItem label="Por cobrar" value={formatCurrency(primarySummary.ingresosPendientesMes, primarySummary.currency)} tone="green" />
+            <PulseItem label="Recurrentes pendientes" value={formatCurrency(primarySummary.gastosRecurrentesPendientes, primarySummary.currency)} tone="amber" />
+            <PulseItem label="Gastos registrados" value={formatCurrency(primarySummary.gastosRegistradosMes, primarySummary.currency)} tone="red" />
+            <PulseItem label="Tarjetas por pagar" value={formatCurrency(primarySummary.pagosTarjetaPendientes, primarySummary.currency)} tone="blue" />
+          </div>
+
+          <p style={{ marginTop: 14, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+            {primarySummary.resultadoMes >= 0
+              ? `Este mes podrías cerrar con ${formatCurrency(primarySummary.resultadoMes, primarySummary.currency)} a favor.`
+              : `Con este ritmo, este mes podrías quedar ${formatCurrency(Math.abs(primarySummary.resultadoMes), primarySummary.currency)} por debajo.`}
+          </p>
+        </div>
+      )}
+
+      {cashFlow.summaries.length > 1 && (
+        <div className="anim-fade-up d1" style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+          {cashFlow.summaries.map(summary => (
+            <div key={summary.currency} className="card-glass" style={{ borderRadius: 14, padding: '12px 14px', display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{summary.currency}</span>
+              <strong style={{ color: summary.saldoEstimadoCierre >= 0 ? 'var(--accent-green)' : 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>{formatCurrency(summary.saldoEstimadoCierre, summary.currency)}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="card card-glass anim-fade-up d2" style={{ padding: '16px 14px', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px 8px' }}>
+          <p className="label-caps">Flujo acumulado · {primaryCurrency}</p>
+          <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)' }}>
+            <span style={{ color: 'var(--accent-green)' }}>Ingresos</span>
+            <span style={{ color: 'var(--accent-rose)' }}>Gastos</span>
+            <span style={{ color: 'var(--accent-amber)' }}>Recurrentes</span>
+            <span style={{ color: 'var(--accent-blue)' }}>Tarjetas</span>
+          </div>
+        </div>
+        <CashFlowChart points={primaryPoints} currency={primaryCurrency} />
+      </div>
+
+      <div className="card card-glass anim-fade-up d2" style={{ padding: '16px', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <p className="label-caps">Línea de tiempo del mes</p>
+          <Link href="/income" style={{ fontSize: 12, color: 'var(--accent-blue)', textDecoration: 'none', fontWeight: 700 }}>Ingresos →</Link>
+        </div>
+        {upcomingFlowEvents.length === 0 ? (
+          <div className="empty-state" style={{ padding: '18px 10px' }}>
+            <p className="empty-state-desc">Sin eventos pendientes este mes.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {upcomingFlowEvents.map(event => <TimelineEvent key={event.id} event={event} />)}
+          </div>
+        )}
       </div>
 
       {/* Alert pill */}
       <div className={`anim-fade-up d1 ${alertStyle.bg}`} style={{ borderRadius: 16, padding: '12px 15px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 9, boxShadow: 'var(--shadow-card)', backdropFilter: 'blur(16px)' }}>
         <span style={{ fontSize: 16 }}>{alertEmoji}</span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: alertStyle.text }}>
-          {getAlertMessage(metrics)}
-        </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: alertStyle.text }}>
+            {getAlertMessage(metrics)}
+          </span>
       </div>
 
       {/* Main metrics 2x2 */}
@@ -271,6 +359,49 @@ function SmallMetric({ label, value, alert }: { label: string; value: string; al
     <div className="metric-card card-glass" style={{ padding: '12px 10px', textAlign: 'center' }}>
       <p className="metric-label">{label}</p>
       <p className="metric-value" style={{ fontSize: 13, color: alert ? 'var(--accent-rose)' : 'var(--text-primary)' }}>{value}</p>
+    </div>
+  )
+}
+
+function PulseItem({ label, value, tone }: { label: string; value: string; tone: 'green' | 'amber' | 'red' | 'blue' }) {
+  const color = {
+    green: 'var(--accent-green)',
+    amber: 'var(--accent-amber)',
+    red: 'var(--accent-rose)',
+    blue: 'var(--accent-blue)',
+  }[tone]
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: '11px 12px' }}>
+      <p style={{ fontSize: 10, color: 'var(--text-label)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>{label}</p>
+      <p style={{ fontSize: 14, color, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{value}</p>
+    </div>
+  )
+}
+
+function TimelineEvent({ event }: { event: CashFlowEvent }) {
+  const positive = event.amount > 0
+  const neutral = event.amount === 0
+  const color = neutral ? 'var(--accent-blue)' : positive ? 'var(--accent-green)' : 'var(--accent-rose)'
+  const label = {
+    income: 'Ingreso',
+    expense: 'Gasto',
+    recurring: 'Recurrente',
+    card_payment: 'Pago tarjeta',
+    card_close: 'Corte tarjeta',
+  }[event.type]
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '42px 1fr auto', gap: 10, alignItems: 'center' }}>
+      <div style={{ position: 'relative', minHeight: 42, display: 'grid', placeItems: 'center' }}>
+        <span style={{ width: 12, height: 12, borderRadius: 999, background: color, boxShadow: `0 0 18px ${color}` }} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{event.label}</p>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Día {event.day} · {label}{event.source ? ` · ${event.source}` : ''}</p>
+      </div>
+      <span style={{ color, fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-mono)' }}>
+        {neutral ? 'Fecha' : `${positive ? '+' : '-'}${formatCurrency(Math.abs(event.amount), event.currency)}`}
+      </span>
     </div>
   )
 }

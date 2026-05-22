@@ -1,5 +1,17 @@
-import { Expense, DashboardMetrics, AlertLevel, RecurringExpense, Account } from '@/lib/supabase/types'
-import { getDaysInMonth, getDate, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns'
+import {
+  Account,
+  CashFlowCurrencySummary,
+  CashFlowEvent,
+  CashFlowPoint,
+  CreditCard,
+  Currency,
+  DashboardMetrics,
+  Expense,
+  IncomeSource,
+  AlertLevel,
+  RecurringExpense,
+} from '@/lib/supabase/types'
+import { getDaysInMonth, getDate, startOfMonth, endOfMonth, isWithinInterval, parseISO, format } from 'date-fns'
 
 export function getMonthExpenses(expenses: Expense[], financialDayStart: number = 1): Expense[] {
   const today = new Date()
@@ -44,6 +56,274 @@ export function getMonthlyRecurringTotal(recurringExpenses: RecurringExpense[]):
       if (r.frequency === 'anual') return sum + base / 12
       return sum + base
     }, 0)
+}
+
+function clampDay(year: number, month: number, day: number): number {
+  return Math.min(Math.max(day, 1), getDaysInMonth(new Date(year, month, 1)))
+}
+
+function monthDate(year: number, month: number, day: number): Date {
+  return new Date(year, month, clampDay(year, month, day))
+}
+
+function dateKey(date: Date): string {
+  return format(date, 'yyyy-MM-dd')
+}
+
+function normalizeIncomeFrequency(frequency: IncomeSource['frequency']): IncomeSource['frequency'] {
+  return frequency === 'unico' ? 'único' : frequency
+}
+
+export function getIncomeOccurrencesForMonth(income: IncomeSource, baseDate: Date = new Date()): CashFlowEvent[] {
+  if (!income.is_active) return []
+  const year = baseDate.getFullYear()
+  const month = baseDate.getMonth()
+  const frequency = normalizeIncomeFrequency(income.frequency)
+  const daysInMonth = getDaysInMonth(baseDate)
+  const days: number[] = []
+
+  if (frequency === 'mensual' || frequency === 'único') {
+    days.push(clampDay(year, month, income.day_of_month))
+  } else if (frequency === 'quincenal') {
+    days.push(clampDay(year, month, income.day_of_month))
+    days.push(clampDay(year, month, income.day_of_month + 15))
+  } else if (frequency === 'semanal') {
+    let day = clampDay(year, month, income.day_of_month)
+    while (day <= daysInMonth) {
+      days.push(day)
+      day += 7
+    }
+  }
+
+  return Array.from(new Set(days)).sort((a, b) => a - b).map(day => {
+    const date = monthDate(year, month, day)
+    return {
+      id: `income-${income.id}-${day}`,
+      date: dateKey(date),
+      day,
+      type: 'income',
+      label: income.name,
+      amount: income.amount,
+      currency: income.currency,
+      status: date < startOfToday(baseDate) ? 'done' : 'pending',
+      source: income.destination_account?.name || undefined,
+      color: 'var(--accent-green)',
+    }
+  })
+}
+
+export function getRecurringOccurrencesForMonth(recurring: RecurringExpense, baseDate: Date = new Date()): CashFlowEvent[] {
+  if (!recurring.is_active) return []
+  const year = baseDate.getFullYear()
+  const month = baseDate.getMonth()
+  const daysInMonth = getDaysInMonth(baseDate)
+  const days: number[] = []
+
+  if (recurring.frequency === 'mensual' || recurring.frequency === 'anual') {
+    days.push(clampDay(year, month, recurring.charge_day))
+  } else if (recurring.frequency === 'quincenal') {
+    days.push(clampDay(year, month, recurring.charge_day))
+    days.push(clampDay(year, month, recurring.charge_day + 15))
+  } else if (recurring.frequency === 'semanal') {
+    let day = clampDay(year, month, recurring.charge_day)
+    while (day <= daysInMonth) {
+      days.push(day)
+      day += 7
+    }
+  }
+
+  return Array.from(new Set(days)).sort((a, b) => a - b).map(day => {
+    const date = monthDate(year, month, day)
+    return {
+      id: `recurring-${recurring.id}-${day}`,
+      date: dateKey(date),
+      day,
+      type: 'recurring',
+      label: recurring.name,
+      amount: -recurring.amount,
+      currency: recurring.currency,
+      status: date < startOfToday(baseDate) ? 'done' : 'pending',
+      source: recurring.category?.name || recurring.payment_method,
+      color: recurring.category?.color || 'var(--accent-amber)',
+    }
+  })
+}
+
+function startOfToday(baseDate: Date = new Date()): Date {
+  const today = new Date(baseDate)
+  today.setHours(0, 0, 0, 0)
+  return today
+}
+
+export function getCurrentMonthExpenses(expenses: Expense[], baseDate: Date = new Date()): Expense[] {
+  const start = startOfMonth(baseDate)
+  const end = endOfMonth(baseDate)
+  return expenses.filter(e => isWithinInterval(parseISO(e.date), { start, end }))
+}
+
+function getMonthCardPaymentEvents(cards: CreditCard[], baseDate: Date = new Date()): CashFlowEvent[] {
+  const year = baseDate.getFullYear()
+  const month = baseDate.getMonth()
+  const today = startOfToday(baseDate)
+  return cards
+    .filter(card => card.is_active)
+    .flatMap(card => {
+      const dueDate = monthDate(year, month, card.payment_due_day)
+      const closeDate = monthDate(year, month, card.billing_close_day)
+      const events: CashFlowEvent[] = [{
+        id: `card-close-${card.id}`,
+        date: dateKey(closeDate),
+        day: closeDate.getDate(),
+        type: 'card_close',
+        label: `Corte ${card.name}`,
+        amount: 0,
+        currency: card.currency,
+        status: 'marker',
+        source: card.bank,
+        color: card.color,
+      }]
+
+      if (card.current_balance > 0) {
+        events.push({
+          id: `card-payment-${card.id}`,
+          date: dateKey(dueDate),
+          day: dueDate.getDate(),
+          type: 'card_payment',
+          label: `Pago ${card.name}`,
+          amount: -card.current_balance,
+          currency: card.currency,
+          status: dueDate < today ? 'done' : 'pending',
+          source: card.bank,
+          color: card.color,
+        })
+      }
+
+      return events
+    })
+}
+
+export function buildCashFlow(
+  accounts: Account[],
+  incomeSources: IncomeSource[],
+  expenses: Expense[],
+  recurringExpenses: RecurringExpense[],
+  cards: CreditCard[],
+  baseDate: Date = new Date()
+): { summaries: CashFlowCurrencySummary[]; events: CashFlowEvent[]; pointsByCurrency: Record<string, CashFlowPoint[]> } {
+  const today = startOfToday(baseDate)
+  const monthExpenses = getCurrentMonthExpenses(expenses, baseDate)
+  const incomeEvents = incomeSources.flatMap(income => getIncomeOccurrencesForMonth(income, baseDate))
+  const recurringEvents = recurringExpenses.flatMap(rec => getRecurringOccurrencesForMonth(rec, baseDate))
+  const expenseEvents: CashFlowEvent[] = monthExpenses.map(exp => ({
+    id: `expense-${exp.id}`,
+    date: exp.date,
+    day: parseISO(exp.date).getDate(),
+    type: 'expense',
+    label: exp.name,
+    amount: -exp.amount,
+    currency: exp.currency,
+    status: 'done',
+    source: exp.category?.name || exp.payment_method,
+    color: exp.category?.color || 'var(--accent-rose)',
+  }))
+  const cardEvents = getMonthCardPaymentEvents(cards, baseDate)
+
+  const events = [...incomeEvents, ...expenseEvents, ...recurringEvents, ...cardEvents]
+    .sort((a, b) => a.date.localeCompare(b.date) || eventWeight(a.type) - eventWeight(b.type))
+
+  const currencies = new Set<Currency>()
+  accounts.forEach(a => currencies.add(a.currency))
+  incomeSources.forEach(i => currencies.add(i.currency))
+  monthExpenses.forEach(e => currencies.add(e.currency))
+  recurringExpenses.forEach(r => currencies.add(r.currency))
+  cards.forEach(c => currencies.add(c.currency))
+
+  const summaries = Array.from(currencies).sort().map(currency => {
+    const saldoActual = accounts
+      .filter(a => a.is_active && a.currency === currency)
+      .reduce((sum, a) => sum + a.current_balance, 0)
+    const ingresos = incomeEvents.filter(e => e.currency === currency)
+    const recurrentes = recurringEvents.filter(e => e.currency === currency)
+    const gastos = monthExpenses.filter(e => e.currency === currency)
+    const pagosTarjeta = cardEvents.filter(e => e.currency === currency && e.type === 'card_payment')
+
+    const ingresosTotalesMes = ingresos.reduce((sum, e) => sum + Math.max(e.amount, 0), 0)
+    const ingresosPendientesMes = ingresos
+      .filter(e => parseISO(e.date) >= today)
+      .reduce((sum, e) => sum + Math.max(e.amount, 0), 0)
+    const gastosRegistradosMes = gastos.reduce((sum, e) => sum + e.amount, 0)
+    const gastosRecurrentesEstimadosMes = recurrentes.reduce((sum, e) => sum + Math.abs(e.amount), 0)
+    const gastosRecurrentesPendientes = recurrentes
+      .filter(e => parseISO(e.date) >= today && !isRecurringAlreadyRegistered(e, monthExpenses))
+      .reduce((sum, e) => sum + Math.abs(e.amount), 0)
+    const pagosTarjetaPendientes = pagosTarjeta
+      .filter(e => parseISO(e.date) >= today)
+      .reduce((sum, e) => sum + Math.abs(e.amount), 0)
+    const saldoEstimadoCierre = saldoActual + ingresosPendientesMes - gastosRecurrentesPendientes - pagosTarjetaPendientes
+    const resultadoMes = ingresosTotalesMes - gastosRegistradosMes - gastosRecurrentesEstimadosMes - pagosTarjetaPendientes
+
+    return {
+      currency,
+      saldoActual,
+      ingresosPendientesMes,
+      ingresosTotalesMes,
+      gastosRegistradosMes,
+      gastosRecurrentesEstimadosMes,
+      gastosRecurrentesPendientes,
+      pagosTarjetaPendientes,
+      saldoEstimadoCierre,
+      resultadoMes,
+      acumuladoLibre: saldoEstimadoCierre,
+    }
+  })
+
+  return {
+    summaries,
+    events,
+    pointsByCurrency: Object.fromEntries(Array.from(currencies).map(currency => [
+      currency,
+      buildCashFlowPoints(currency, accounts, events, baseDate),
+    ])),
+  }
+}
+
+function eventWeight(type: CashFlowEvent['type']): number {
+  return { income: 1, expense: 2, recurring: 3, card_payment: 4, card_close: 5 }[type]
+}
+
+function isRecurringAlreadyRegistered(event: CashFlowEvent, expenses: Expense[]): boolean {
+  return expenses.some(exp =>
+    exp.recurring_expense_id &&
+    exp.name.trim().toLowerCase() === event.label.trim().toLowerCase() &&
+    exp.date.slice(0, 7) === event.date.slice(0, 7)
+  )
+}
+
+function buildCashFlowPoints(currency: Currency, accounts: Account[], events: CashFlowEvent[], baseDate: Date): CashFlowPoint[] {
+  const daysInMonth = getDaysInMonth(baseDate)
+  let balance = accounts
+    .filter(a => a.is_active && a.currency === currency)
+    .reduce((sum, a) => sum + a.current_balance, 0)
+
+  return Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1
+    const dayEvents = events.filter(e => e.currency === currency && e.day === day && e.type !== 'card_close')
+    const income = dayEvents.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0)
+    const expenses = dayEvents.filter(e => e.type === 'expense').reduce((sum, e) => sum + Math.abs(e.amount), 0)
+    const recurring = dayEvents.filter(e => e.type === 'recurring').reduce((sum, e) => sum + Math.abs(e.amount), 0)
+    const cards = dayEvents.filter(e => e.type === 'card_payment').reduce((sum, e) => sum + Math.abs(e.amount), 0)
+    balance += income - expenses - recurring - cards
+
+    return {
+      day,
+      date: dateKey(monthDate(baseDate.getFullYear(), baseDate.getMonth(), day)),
+      balance,
+      income,
+      expenses,
+      recurring,
+      cards,
+    }
+  })
 }
 
 export function calculateMetrics(

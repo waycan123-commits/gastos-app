@@ -29,6 +29,8 @@ export default function AccountsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editAcc, setEditAcc] = useState<Account | null>(null)
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [form, setForm] = useState<AccForm>(emptyAcc())
 
   const load = useCallback(async () => {
@@ -39,6 +41,8 @@ export default function AccountsPage() {
       supabase.from('expenses').select('*, category:categories(*)')
         .eq('user_id', user.id).not('account_id', 'is', null),
     ])
+    if (accsRes.error) { console.error('Error loading accounts', accsRes.error); setError('No se pudieron cargar las cuentas.') }
+    if (expRes.error) console.error('Error loading account expenses', expRes.error)
     setAccounts(accsRes.data || [])
     setExpenses(expRes.data || [])
     setLoading(false)
@@ -64,21 +68,27 @@ export default function AccountsPage() {
       note: form.note || null, is_active: form.is_active, updated_at: new Date().toISOString(),
     }
     if (editAcc) {
-      await supabase.from('accounts').update(payload).eq('id', editAcc.id)
+      const { error: saveError } = await supabase.from('accounts').update(payload).eq('id', editAcc.id)
+      if (saveError) { console.error('Error updating account', saveError); setError('No se pudo guardar la cuenta.'); setSaving(false); return }
     } else {
-      await supabase.from('accounts').insert({ ...payload, user_id: user.id })
+      const { error: saveError } = await supabase.from('accounts').insert({ ...payload, user_id: user.id })
+      if (saveError) { console.error('Error creating account', saveError); setError('No se pudo crear la cuenta.'); setSaving(false); return }
     }
+    setMessage(editAcc ? 'Cuenta actualizada.' : 'Cuenta creada.')
+    setTimeout(() => setMessage(''), 2600)
     setSaving(false); closeForm(); load()
   }
 
   async function handleToggle(acc: Account) {
-    await supabase.from('accounts').update({ is_active: !acc.is_active }).eq('id', acc.id)
+    const { error: toggleError } = await supabase.from('accounts').update({ is_active: !acc.is_active }).eq('id', acc.id)
+    if (toggleError) { console.error('Error toggling account', toggleError); setError('No se pudo cambiar el estado.'); return }
     load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar esta cuenta? Los gastos asociados no se eliminarán.')) return
-    await supabase.from('accounts').delete().eq('id', id)
+    const { error: deleteError } = await supabase.from('accounts').delete().eq('id', id)
+    if (deleteError) { console.error('Error deleting account', deleteError); setError('No se pudo eliminar la cuenta.'); return }
     setAccounts(prev => prev.filter(a => a.id !== id))
   }
 
@@ -86,7 +96,10 @@ export default function AccountsPage() {
     return getMonthExpenses(expenses.filter(e => e.account_id === accId)).reduce((s, e) => s + e.amount, 0)
   }
 
-  const totalBalance = accounts.filter(a => a.is_active).reduce((s, a) => s + a.current_balance, 0)
+  const balancesByCurrency = accounts.filter(a => a.is_active).reduce<Record<string, number>>((acc, account) => {
+    acc[account.currency] = (acc[account.currency] || 0) + account.current_balance
+    return acc
+  }, {})
 
   if (loading) return <Shell><div className="empty-state"><p>Cargando...</p></div></Shell>
 
@@ -99,14 +112,23 @@ export default function AccountsPage() {
         </div>
         <button className="btn-primary" onClick={openNew} style={{ padding: '9px 16px', fontSize: 14 }}>+ Nueva</button>
       </div>
+      {message && <div className="toast-success anim-fade-up d0">{message}</div>}
+      {error && <div className="toast-error anim-fade-up d0">{error}</div>}
 
       {accounts.length > 0 && (
         <div className="card card-glass metric-card anim-fade-up d1" style={{ marginBottom: 16 }}>
-          <p className="metric-label">Saldo total disponible</p>
-          <p className="metric-value" style={{ color: 'var(--accent-green)' }}>
-            {formatCurrency(totalBalance, 'PEN')}
-          </p>
-          <p className="metric-sub">Suma de todas las cuentas activas</p>
+          <p className="metric-label">Saldo disponible por moneda</p>
+          <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+            {Object.entries(balancesByCurrency).map(([currency, total]) => (
+              <div key={currency} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{currency}</span>
+                <strong style={{ color: total >= 0 ? 'var(--accent-green)' : 'var(--accent-rose)', fontFamily: 'var(--font-mono)', fontSize: 18 }}>
+                  {formatCurrency(total, currency)}
+                </strong>
+              </div>
+            ))}
+          </div>
+          <p className="metric-sub">Solo cuentas activas: débito, efectivo, ahorro y billeteras digitales</p>
         </div>
       )}
 
@@ -185,7 +207,7 @@ export default function AccountsPage() {
               <button className="btn-icon" onClick={closeForm} style={{ fontSize: 18 }}>✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <form onSubmit={handleSubmit} className="mobile-form">
               <div>
                 <label className="form-label">Nombre de la cuenta</label>
                 <input className="input-field" placeholder="Ej. BCP Soles, Efectivo casa" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
@@ -221,7 +243,7 @@ export default function AccountsPage() {
                 <input className="input-field" placeholder="Detalles..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <div className="form-actions">
                 <button type="button" className="btn-ghost" onClick={closeForm} style={{ flex: 1 }}>Cancelar</button>
                 <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 2 }}>
                   {saving ? 'Guardando...' : editAcc ? 'Guardar cambios' : 'Crear cuenta'}

@@ -40,6 +40,8 @@ export default function RecurringPage() {
   const [editRec, setEditRec] = useState<RecurringExpense | null>(null)
   const [saving, setSaving] = useState(false)
   const [registering, setRegistering] = useState<string | null>(null)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [form, setForm] = useState<RecForm>(emptyRec())
 
   const load = useCallback(async () => {
@@ -53,6 +55,10 @@ export default function RecurringPage() {
       supabase.from('accounts').select('*').eq('user_id', user.id).eq('is_active', true),
       supabase.from('profiles').select('currency').eq('user_id', user.id).single(),
     ])
+    if (recRes.error) { console.error('Error loading recurring expenses', recRes.error); setError('No se pudieron cargar los recurrentes.') }
+    if (catRes.error) console.error('Error loading categories', catRes.error)
+    if (cardsRes.error) console.error('Error loading cards', cardsRes.error)
+    if (accsRes.error) console.error('Error loading accounts', accsRes.error)
     setRecurring(recRes.data || [])
     setCategories(catRes.data || [])
     setCards(cardsRes.data || [])
@@ -88,21 +94,27 @@ export default function RecurringPage() {
       is_active: form.is_active, note: form.note || null, updated_at: new Date().toISOString(),
     }
     if (editRec) {
-      await supabase.from('recurring_expenses').update(payload).eq('id', editRec.id)
+      const { error: saveError } = await supabase.from('recurring_expenses').update(payload).eq('id', editRec.id)
+      if (saveError) { console.error('Error updating recurring expense', saveError); setError('No se pudo guardar el recurrente.'); setSaving(false); return }
     } else {
-      await supabase.from('recurring_expenses').insert({ ...payload, user_id: user.id })
+      const { error: saveError } = await supabase.from('recurring_expenses').insert({ ...payload, user_id: user.id })
+      if (saveError) { console.error('Error creating recurring expense', saveError); setError('No se pudo crear el recurrente.'); setSaving(false); return }
     }
+    setMessage(editRec ? 'Recurrente actualizado.' : 'Recurrente creado.')
+    setTimeout(() => setMessage(''), 2600)
     setSaving(false); closeForm(); load()
   }
 
   async function handleToggle(r: RecurringExpense) {
-    await supabase.from('recurring_expenses').update({ is_active: !r.is_active }).eq('id', r.id)
+    const { error: toggleError } = await supabase.from('recurring_expenses').update({ is_active: !r.is_active }).eq('id', r.id)
+    if (toggleError) { console.error('Error toggling recurring expense', toggleError); setError('No se pudo cambiar el estado.'); return }
     load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este gasto recurrente?')) return
-    await supabase.from('recurring_expenses').delete().eq('id', id)
+    const { error: deleteError } = await supabase.from('recurring_expenses').delete().eq('id', id)
+    if (deleteError) { console.error('Error deleting recurring expense', deleteError); setError('No se pudo eliminar el recurrente.'); return }
     setRecurring(prev => prev.filter(r => r.id !== id))
   }
 
@@ -115,11 +127,11 @@ export default function RecurringPage() {
       .select('id').eq('user_id', user.id).eq('recurring_expense_id', r.id)
       .gte('date', `${thisMonth}-01`).lte('date', `${thisMonth}-31`)
     if (existing && existing.length > 0) {
-      alert('Este gasto ya fue registrado este mes.')
+      setError('Este gasto ya fue registrado este mes.')
       return
     }
     setRegistering(r.id)
-    await supabase.from('expenses').insert({
+    const { error: registerError } = await supabase.from('expenses').insert({
       user_id: user.id, name: r.name, category_id: r.category_id,
       amount: r.amount, currency: r.currency,
       date: new Date().toISOString().split('T')[0],
@@ -128,7 +140,9 @@ export default function RecurringPage() {
       note: `Recurrente: ${r.frequency}`,
     })
     setRegistering(null)
-    alert(`✅ "${r.name}" registrado como gasto de este mes.`)
+    if (registerError) { console.error('Error registering recurring expense', registerError); setError('No se pudo registrar el gasto del mes.'); return }
+    setMessage(`"${r.name}" registrado como gasto de este mes.`)
+    setTimeout(() => setMessage(''), 2600)
   }
 
   const activeRecs = recurring.filter(r => r.is_active)
@@ -145,6 +159,8 @@ export default function RecurringPage() {
         </div>
         <button className="btn-primary" onClick={openNew} style={{ padding: '9px 16px', fontSize: 14 }}>+ Nuevo</button>
       </div>
+      {message && <div className="toast-success anim-fade-up d0">{message}</div>}
+      {error && <div className="toast-error anim-fade-up d0">{error}</div>}
 
       {activeRecs.length > 0 && (
         <div className="card card-glass metric-card anim-fade-up d1" style={{ marginBottom: 16 }}>
@@ -240,7 +256,7 @@ export default function RecurringPage() {
               <button className="btn-icon" onClick={closeForm} style={{ fontSize: 18 }}>✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <form onSubmit={handleSubmit} className="mobile-form">
               <div>
                 <label className="form-label">Nombre</label>
                 <input className="input-field" placeholder="Netflix, Seguro, Cuota..." value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
@@ -322,7 +338,7 @@ export default function RecurringPage() {
                 <input className="input-field" placeholder="Detalles..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <div className="form-actions">
                 <button type="button" className="btn-ghost" onClick={closeForm} style={{ flex: 1 }}>Cancelar</button>
                 <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 2 }}>
                   {saving ? 'Guardando...' : editRec ? 'Guardar cambios' : 'Crear recurrente'}

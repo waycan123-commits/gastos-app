@@ -25,6 +25,8 @@ export default function CardsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editCard, setEditCard] = useState<CreditCard | null>(null)
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [form, setForm] = useState<CardForm>(emptyCard())
 
   const load = useCallback(async () => {
@@ -35,6 +37,8 @@ export default function CardsPage() {
       supabase.from('expenses').select('*, category:categories(*)')
         .eq('user_id', user.id).not('credit_card_id', 'is', null),
     ])
+    if (cardsRes.error) { console.error('Error loading cards', cardsRes.error); setError('No se pudieron cargar las tarjetas.') }
+    if (expRes.error) console.error('Error loading card expenses', expRes.error)
     setCards(cardsRes.data || [])
     setExpenses(expRes.data || [])
     setLoading(false)
@@ -71,21 +75,27 @@ export default function CardsPage() {
       updated_at: new Date().toISOString(),
     }
     if (editCard) {
-      await supabase.from('credit_cards').update(payload).eq('id', editCard.id)
+      const { error: saveError } = await supabase.from('credit_cards').update(payload).eq('id', editCard.id)
+      if (saveError) { console.error('Error updating card', saveError); setError('No se pudo guardar la tarjeta.'); setSaving(false); return }
     } else {
-      await supabase.from('credit_cards').insert({ ...payload, user_id: user.id })
+      const { error: saveError } = await supabase.from('credit_cards').insert({ ...payload, user_id: user.id })
+      if (saveError) { console.error('Error creating card', saveError); setError('No se pudo crear la tarjeta.'); setSaving(false); return }
     }
+    setMessage(editCard ? 'Tarjeta actualizada.' : 'Tarjeta creada.')
+    setTimeout(() => setMessage(''), 2600)
     setSaving(false); closeForm(); load()
   }
 
   async function handleToggle(card: CreditCard) {
-    await supabase.from('credit_cards').update({ is_active: !card.is_active }).eq('id', card.id)
+    const { error: toggleError } = await supabase.from('credit_cards').update({ is_active: !card.is_active }).eq('id', card.id)
+    if (toggleError) { console.error('Error toggling card', toggleError); setError('No se pudo cambiar el estado.'); return }
     load()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar esta tarjeta? Los gastos asociados no se eliminarán.')) return
-    await supabase.from('credit_cards').delete().eq('id', id)
+    const { error: deleteError } = await supabase.from('credit_cards').delete().eq('id', id)
+    if (deleteError) { console.error('Error deleting card', deleteError); setError('No se pudo eliminar la tarjeta.'); return }
     setCards(prev => prev.filter(c => c.id !== id))
   }
 
@@ -105,6 +115,8 @@ export default function CardsPage() {
         </div>
         <button className="btn-primary" onClick={openNew} style={{ padding: '9px 16px', fontSize: 14 }}>+ Nueva</button>
       </div>
+      {message && <div className="toast-success anim-fade-up d0">{message}</div>}
+      {error && <div className="toast-error anim-fade-up d0">{error}</div>}
 
       {cards.length === 0 ? (
         <div className="card card-glass empty-state anim-fade-up d1">
@@ -208,7 +220,7 @@ export default function CardsPage() {
               <button className="btn-icon" onClick={closeForm} style={{ fontSize: 18 }}>✕</button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <form onSubmit={handleSubmit} className="mobile-form">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label className="form-label">Nombre tarjeta</label>
@@ -270,7 +282,7 @@ export default function CardsPage() {
                 <input className="input-field" placeholder="Ej. Principal para compras en línea" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
 
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <div className="form-actions">
                 <button type="button" className="btn-ghost" onClick={closeForm} style={{ flex: 1 }}>Cancelar</button>
                 <button type="submit" className="btn-primary" disabled={saving} style={{ flex: 2 }}>
                   {saving ? 'Guardando...' : editCard ? 'Guardar cambios' : 'Crear tarjeta'}

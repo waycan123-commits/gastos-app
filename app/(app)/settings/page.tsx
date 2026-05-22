@@ -22,6 +22,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
   const [form, setForm] = useState({ monthly_income: '', currency: 'PEN', financial_day_start: '1' })
 
   useEffect(() => {
@@ -29,7 +30,8 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setEmail(user.email || '')
-      const { data } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
+      const { data, error: profileError } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
+      if (profileError) console.error('Error loading profile', profileError)
       if (data) {
         setProfile(data)
         setForm({ monthly_income: String(data.monthly_income), currency: data.currency, financial_day_start: String(data.financial_day_start) })
@@ -52,9 +54,11 @@ export default function SettingsPage() {
       updated_at: new Date().toISOString(),
     }
     if (profile) {
-      await supabase.from('profiles').update(payload).eq('user_id', user.id)
+      const { error: saveError } = await supabase.from('profiles').update(payload).eq('user_id', user.id)
+      if (saveError) { console.error('Error updating profile', saveError); setError('No se pudo guardar la configuración.'); setSaving(false); return }
     } else {
-      await supabase.from('profiles').insert(payload)
+      const { error: saveError } = await supabase.from('profiles').insert(payload)
+      if (saveError) { console.error('Error creating profile', saveError); setError('No se pudo crear tu perfil.'); setSaving(false); return }
     }
     setSaving(false)
     setSaved(true)
@@ -81,8 +85,9 @@ export default function SettingsPage() {
         <h1 className="page-title">Configuración</h1>
         <p className="page-subtitle">{email}</p>
       </div>
+      {error && <div className="toast-error anim-fade-up d0">{error}</div>}
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form onSubmit={handleSave} className="mobile-form">
         {/* Financial profile */}
         <div className="card card-glass anim-fade-up d1" style={{ padding: '20px 18px' }}>
           <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -126,14 +131,16 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <button
-          type="submit"
-          className="btn-primary anim-fade-up d2"
-          disabled={saving}
-          style={{ padding: '13px', fontSize: 15, background: saved ? 'var(--accent-green)' : undefined }}
-        >
-          {saving ? 'Guardando...' : saved ? '✓ Cambios guardados' : 'Guardar configuración'}
-        </button>
+        <div className="form-actions anim-fade-up d2">
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={saving}
+            style={{ width: '100%', padding: '13px', fontSize: 15, background: saved ? 'var(--accent-green)' : undefined }}
+          >
+            {saving ? 'Guardando...' : saved ? '✓ Cambios guardados' : 'Guardar configuración'}
+          </button>
+        </div>
       </form>
 
       {/* PWA install */}

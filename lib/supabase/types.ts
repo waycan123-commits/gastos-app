@@ -3,6 +3,7 @@ export type PaymentMethod = 'efectivo' | 'débito' | 'crédito' | 'transferencia
 export type PaymentSourceType = 'account' | 'credit_card' | 'none'
 export type AccountType = 'débito' | 'efectivo' | 'ahorro' | 'billetera_digital' | 'otra'
 export type RecurringFrequency = 'semanal' | 'quincenal' | 'mensual' | 'anual'
+export type IncomeFrequency = 'semanal' | 'quincenal' | 'mensual' | 'único' | 'unico'
 export type AlertLevel = 'green' | 'yellow' | 'orange' | 'red' | 'critical'
 
 export interface Profile {
@@ -106,6 +107,59 @@ export interface RecurringExpense {
   category?: Category
   account?: Account
   credit_card?: CreditCard
+}
+
+export interface IncomeSource {
+  id: string
+  user_id: string
+  name: string
+  amount: number
+  currency: Currency
+  frequency: IncomeFrequency
+  day_of_month: number
+  destination_account_id?: string | null
+  is_active: boolean
+  notes?: string | null
+  created_at: string
+  updated_at: string
+  destination_account?: Account | null
+}
+
+export interface CashFlowEvent {
+  id: string
+  date: string
+  day: number
+  type: 'income' | 'expense' | 'recurring' | 'card_payment' | 'card_close'
+  label: string
+  amount: number
+  currency: Currency
+  status: 'done' | 'pending' | 'marker'
+  source?: string
+  color?: string
+}
+
+export interface CashFlowCurrencySummary {
+  currency: Currency
+  saldoActual: number
+  ingresosPendientesMes: number
+  ingresosTotalesMes: number
+  gastosRegistradosMes: number
+  gastosRecurrentesEstimadosMes: number
+  gastosRecurrentesPendientes: number
+  pagosTarjetaPendientes: number
+  saldoEstimadoCierre: number
+  resultadoMes: number
+  acumuladoLibre: number
+}
+
+export interface CashFlowPoint {
+  day: number
+  date: string
+  balance: number
+  income: number
+  expenses: number
+  recurring: number
+  cards: number
 }
 
 export interface StatementImport {
